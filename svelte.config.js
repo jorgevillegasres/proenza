@@ -8,10 +8,15 @@ const config = {
   extensions: ['.svelte', '.md'],
   preprocess: [vitePreprocess(), mdsvex({ extensions: ['.md'] })],
   kit: {
-    // Fully prerendered static site — fast, cheap to host, and great for SEO.
+    // Fully prerendered static site — fast, cheap to host.
     adapter: adapter({
       fallback: '404.html',
     }),
+    // En GitHub Pages el sitio vive en /<repo>; BASE_PATH lo inyecta el workflow.
+    // En local/otros hosts queda en la raíz ('').
+    paths: {
+      base: process.env.BASE_PATH || '',
+    },
     prerender: {
       handleHttpError: 'warn',
     },
