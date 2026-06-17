@@ -5,19 +5,20 @@
   import Panel from './Panel.svelte'
   import { site } from '$lib/data/site.js'
 
-  // Texturas pintadas a mano (Higgsfield). Al generar una nueva, guárdala en
-  // src/lib/assets/textures/ e impórtala aquí, luego añádela al objeto `textures`.
-  import grassGhibli from '$lib/assets/textures/grass-ghibli.png'
-  // import pavingGhibli from '$lib/assets/textures/paving-ghibli.png'
-  // import woodGhibli from '$lib/assets/textures/wood-ghibli.png'
-  // import marbleGhibli from '$lib/assets/textures/marble-ghibli.png'
-  // import foliageGhibli from '$lib/assets/textures/foliage-ghibli.png'
+  // Texturas pintadas a mano (Higgsfield). Para añadir una: guárdala en
+  // src/lib/assets/textures/, impórtala aquí y añádela al objeto `textures`.
+  import grassGhibli from '$lib/assets/textures/grass-ghibli.jpg'
+  import pavingGhibli from '$lib/assets/textures/paving-ghibli.jpg'
+  import woodGhibli from '$lib/assets/textures/wood-ghibli.jpg'
+  import marbleGhibli from '$lib/assets/textures/marble-ghibli.jpg'
+  import foliageGhibli from '$lib/assets/textures/foliage-ghibli.jpg'
+  import skyGhibli from '$lib/assets/textures/sky-ghibli.jpg'
   const textures = {
     grass: grassGhibli,
-    // paving: pavingGhibli,
-    // wood: woodGhibli,
-    // marble: marbleGhibli,
-    // foliage: foliageGhibli,
+    paving: pavingGhibli,
+    wood: woodGhibli,
+    marble: marbleGhibli,
+    foliage: foliageGhibli,
   }
 
   const SPEED = 7.5
@@ -85,10 +86,16 @@
       scene.fog = new THREE.FogExp2(0x0b1730, 0.0052)
       const camera = new THREE.PerspectiveCamera(54, innerWidth / innerHeight, 0.1, 600)
 
-      // --- cielo en degradado --------------------------------------------------
-      const sky = new THREE.Mesh(
-        new THREE.SphereGeometry(320, 32, 32),
-        new THREE.ShaderMaterial({
+      // --- cielo ---------------------------------------------------------------
+      // Con textura pintada (Higgsfield) la mapeamos sobre la cúpula; si no, queda
+      // el degradado procedural de respaldo.
+      let skyMat
+      if (skyGhibli) {
+        const skyTex = new THREE.TextureLoader().load(skyGhibli)
+        skyTex.colorSpace = THREE.SRGBColorSpace
+        skyMat = new THREE.MeshBasicMaterial({ map: skyTex, side: THREE.BackSide, depthWrite: false, fog: false, toneMapped: false })
+      } else {
+        skyMat = new THREE.ShaderMaterial({
           side: THREE.BackSide,
           depthWrite: false,
           uniforms: { top: { value: new THREE.Color(0x070d20) }, bottom: { value: new THREE.Color(0x1c3f6b) } },
@@ -96,7 +103,9 @@
           fragmentShader: `varying vec3 vP; uniform vec3 top; uniform vec3 bottom;
             void main(){ float h=normalize(vP).y*0.5+0.5; gl_FragColor=vec4(mix(bottom,top,smoothstep(0.0,1.0,h)),1.0); }`,
         })
-      )
+      }
+      const sky = new THREE.Mesh(new THREE.SphereGeometry(320, 48, 32), skyMat)
+      sky.rotation.y = Math.PI // mueve la costura del panorama detrás de la vista inicial
       scene.add(sky)
 
       // --- estrellas (dos capas para dar profundidad) -------------------------
