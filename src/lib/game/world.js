@@ -14,7 +14,7 @@ const STATION_DEFS = [
   { id: 'contacto', label: 'Contacto', color: '#1b4d89', dir: [0.22, -0.9, 0.3] },
 ]
 
-export function buildWorld(THREE) {
+export function buildWorld(THREE, options = {}) {
   const group = new THREE.Group()
   const mat = (color, opts = {}) =>
     new THREE.MeshStandardMaterial({ color, roughness: 0.9, metalness: 0.03, ...opts })
@@ -37,6 +37,25 @@ export function buildWorld(THREE) {
     stoneLight: mat(0xb9bec5, { flatShading: true }),
     gold: mat(0xc29a4b, { emissive: 0x6b5200, emissiveIntensity: 0.3, metalness: 0.2, roughness: 0.5 }),
     glass: mat(0x8fb8e0, { roughness: 0.25, metalness: 0.15 }),
+  }
+
+  // Textura del césped pintada a mano (Higgsfield) — "viste" la geometría sin
+  // sacrificar rendimiento. Si no se provee, queda el color plano de antes.
+  if (options.grassUrl) {
+    const tex = new THREE.TextureLoader().load(options.grassUrl)
+    tex.wrapS = tex.wrapT = THREE.RepeatWrapping
+    tex.repeat.set(7, 7)
+    tex.colorSpace = THREE.SRGBColorSpace
+    tex.anisotropy = 4
+    for (const [m, tint] of [
+      [P.grass, 0xffffff],
+      [P.grass2, 0xdfe6da],
+    ]) {
+      m.map = tex
+      m.color.set(tint)
+      m.flatShading = false
+      m.needsUpdate = true
+    }
   }
 
   // --- superficie ------------------------------------------------------------
