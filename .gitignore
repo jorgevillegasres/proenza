@@ -1,0 +1,21 @@
+node_modules
+
+# Output de build / SvelteKit
+/build
+/.svelte-kit
+/package
+/dist
+
+# Entorno y secretos
+.env
+.env.*
+!.env.example
+
+# Ajustes locales de Claude Code (personales)
+.claude/settings.local.json
+
+# Varios
+.DS_Store
+*.log
+vite.config.js.timestamp-*
+vite.config.ts.timestamp-*

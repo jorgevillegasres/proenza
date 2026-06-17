@@ -1,0 +1,25 @@
+{
+  "name": "proenza-abogados",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Proenza Abogados — despacho jurídico como oficina explorable. SvelteKit + Three.js, contenido indexable y blog en markdown.",
+  "scripts": {
+    "dev": "vite dev",
+    "build": "vite build",
+    "preview": "vite preview",
+    "check": "svelte-kit sync && svelte-check --tsconfig ./jsconfig.json"
+  },
+  "devDependencies": {
+    "@sveltejs/adapter-static": "^3.0.8",
+    "@sveltejs/kit": "^2.15.2",
+    "@sveltejs/vite-plugin-svelte": "^5.0.3",
+    "mdsvex": "^0.12.3",
+    "svelte": "^5.19.0",
+    "svelte-check": "^4.1.4",
+    "vite": "^6.0.7"
+  },
+  "dependencies": {
+    "three": "^0.172.0"
+  }
+}
