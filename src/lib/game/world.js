@@ -39,24 +39,33 @@ export function buildWorld(THREE, options = {}) {
     glass: mat(0x8fb8e0, { roughness: 0.25, metalness: 0.15 }),
   }
 
-  // Textura del césped pintada a mano (Higgsfield) — "viste" la geometría sin
-  // sacrificar rendimiento. Si no se provee, queda el color plano de antes.
-  if (options.grassUrl) {
-    const tex = new THREE.TextureLoader().load(options.grassUrl)
-    tex.wrapS = tex.wrapT = THREE.RepeatWrapping
-    tex.repeat.set(7, 7)
-    tex.colorSpace = THREE.SRGBColorSpace
-    tex.anisotropy = 4
-    for (const [m, tint] of [
-      [P.grass, 0xffffff],
-      [P.grass2, 0xdfe6da],
-    ]) {
-      m.map = tex
+  // Texturas pintadas a mano (Higgsfield) — "visten" la geometría sin sacrificar
+  // rendimiento. Todas opcionales: si falta una, queda el color plano de antes.
+  // Para añadir una nueva: genera la imagen, guárdala en src/lib/assets/textures/
+  // e impórtala en OfficePlanet.svelte dentro del objeto `textures`.
+  const TEX = { grass: options.grassUrl, ...(options.textures || {}) }
+  const loader = new THREE.TextureLoader()
+  const applyTex = (mats, url, repeat = 1, tint = 0xffffff) => {
+    if (!url) return
+    const t = loader.load(url)
+    t.wrapS = t.wrapT = THREE.RepeatWrapping
+    t.colorSpace = THREE.SRGBColorSpace
+    t.anisotropy = 4
+    t.repeat.set(repeat, repeat)
+    for (const m of mats) {
+      m.map = t
       m.color.set(tint)
       m.flatShading = false
       m.needsUpdate = true
     }
   }
+  applyTex([P.grass, P.grass2], TEX.grass, 7) // suelo del planeta
+  applyTex([P.plaza, P.plazaDark, P.stoneLight], TEX.paving, 2) // plaza, caminos, bases
+  applyTex([P.stone], TEX.rock, 1) // rocas
+  applyTex([P.wood, P.woodDark], TEX.wood, 1) // mostradores, estantes, postes
+  applyTex([P.cream, P.white], TEX.marble, 1) // columnas crema
+  applyTex([P.leaf, P.leaf2], TEX.foliage, 1) // copas de árboles
+  applyTex([P.navy], TEX.fabric, 2) // alfombra / tapizados
 
   // --- superficie ------------------------------------------------------------
   const surface = new THREE.Mesh(new THREE.IcosahedronGeometry(RADIUS, 16), P.grass)

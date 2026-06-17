@@ -4,7 +4,21 @@
   import { createAvatar } from './avatar.js'
   import Panel from './Panel.svelte'
   import { site } from '$lib/data/site.js'
+
+  // Texturas pintadas a mano (Higgsfield). Al generar una nueva, guárdala en
+  // src/lib/assets/textures/ e impórtala aquí, luego añádela al objeto `textures`.
   import grassGhibli from '$lib/assets/textures/grass-ghibli.png'
+  // import pavingGhibli from '$lib/assets/textures/paving-ghibli.png'
+  // import woodGhibli from '$lib/assets/textures/wood-ghibli.png'
+  // import marbleGhibli from '$lib/assets/textures/marble-ghibli.png'
+  // import foliageGhibli from '$lib/assets/textures/foliage-ghibli.png'
+  const textures = {
+    grass: grassGhibli,
+    // paving: pavingGhibli,
+    // wood: woodGhibli,
+    // marble: marbleGhibli,
+    // foliage: foliageGhibli,
+  }
 
   const SPEED = 7.5
   const GRAVITY = 26
@@ -126,7 +140,7 @@
       scene.add(new THREE.DirectionalLight(0x88aaff, 0.35).translateX(-30).translateY(10))
 
       // --- mundo + avatar ------------------------------------------------------
-      const world = buildWorld(THREE, { grassUrl: grassGhibli })
+      const world = buildWorld(THREE, { textures })
       scene.add(world.group)
       const R = world.radius
       const stations = world.stations
