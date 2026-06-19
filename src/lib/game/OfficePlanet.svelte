@@ -15,6 +15,11 @@
   import wallGhibli from '$lib/assets/textures/wall-ghibli.jpg'
   import skyGhibli from '$lib/assets/textures/sky-ghibli.jpg'
   import ambienteUrl from '$lib/assets/audio/ambiente.m4a'
+  import deskModelUrl from '$lib/assets/models/desk.glb'
+  import bookshelfModelUrl from '$lib/assets/models/bookshelf.glb'
+  import tableModelUrl from '$lib/assets/models/table.glb'
+  import sofaModelUrl from '$lib/assets/models/sofa.glb'
+  import armchairModelUrl from '$lib/assets/models/armchair.glb'
   const textures = {
     wood: woodGhibli,
     rug: rugGhibli,
@@ -169,11 +174,57 @@
       scene.add(new THREE.DirectionalLight(0x88aaff, 0.35).translateX(-30).translateY(10))
 
       // --- mundo + avatar ------------------------------------------------------
-      const world = buildWorld(THREE, { textures })
+      const world = buildWorld(THREE, { textures, models: true })
       scene.add(world.group)
       const R = world.radius
       const stations = world.stations
       stationsUI = stations.map((s) => ({ id: s.id, label: s.label, color: s.color, cta: !!s.cta }))
+
+      // Muebles 3D (Higgsfield → GLTF optimizado). Cada modelo se escala a su
+      // huella y se apoya en el piso; se clona en las posiciones de su zona.
+      const FURNITURE = [
+        { url: deskModelUrl, zone: 'abogados', size: 1.7, baseRot: 0, items: [[-1.4, -0.6, 0], [1.4, -0.6, 0], [0, 1.4, Math.PI]] },
+        { url: bookshelfModelUrl, zone: 'blog', size: 1.9, baseRot: 0, items: [[-1.6, -1.0, 0.2], [0, -1.2, 0], [1.6, -1.0, -0.2]] },
+        { url: armchairModelUrl, zone: 'blog', size: 1.2, baseRot: 0, items: [[-1.5, 1.3, 0.6]] },
+        { url: tableModelUrl, zone: 'agendar', size: 3.0, baseRot: 0, items: [[0, 0, 0]] },
+        { url: sofaModelUrl, zone: 'recepcion', size: 2.2, baseRot: 0, items: [[-1.7, 1.8, 0]] },
+      ]
+      ;(async () => {
+        let GLTFLoader
+        try {
+          ;({ GLTFLoader } = await import('three/examples/jsm/loaders/GLTFLoader.js'))
+        } catch {
+          return
+        }
+        const loader = new GLTFLoader()
+        for (const f of FURNITURE) {
+          const zone = stations.find((s) => s.id === f.zone)?.group
+          if (!zone) continue
+          let base
+          try {
+            base = (await loader.loadAsync(f.url)).scene
+          } catch {
+            continue
+          }
+          const size = new THREE.Vector3()
+          new THREE.Box3().setFromObject(base).getSize(size)
+          base.scale.setScalar(f.size / Math.max(size.x, size.z, 0.001))
+          base.updateMatrixWorld(true)
+          const yOff = -new THREE.Box3().setFromObject(base).min.y
+          base.traverse((o) => {
+            if (o.isMesh) {
+              o.castShadow = true
+              o.receiveShadow = true
+            }
+          })
+          for (const [x, z, ry] of f.items) {
+            const inst = base.clone()
+            inst.position.set(x, yOff, z)
+            inst.rotation.y = ry + f.baseRot
+            zone.add(inst)
+          }
+        }
+      })()
 
       const avatar = createAvatar(THREE)
       scene.add(avatar)

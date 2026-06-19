@@ -16,6 +16,8 @@ const STATION_DEFS = [
 
 export function buildWorld(THREE, options = {}) {
   const group = new THREE.Group()
+  // Cuando hay modelos 3D, se omiten las primitivas de mobiliario que reemplazan.
+  const M = !!options.models
   const mat = (color, opts = {}) =>
     new THREE.MeshStandardMaterial({ color, roughness: 0.85, metalness: 0.04, ...opts })
 
@@ -280,9 +282,11 @@ export function buildWorld(THREE, options = {}) {
       framedPic(g, -1.4, 1.15, -1.31, 0, 0.5, 0.4)
       framedPic(g, 1.4, 1.15, -1.31, 0, 0.5, 0.4)
       clock(g, 0, 1.2, -1.31)
-      // sala de espera
-      box(g, 1.8, 0.5, 0.7, P.navy, -1.7, 0.45, 1.7) // sofá asiento
-      box(g, 1.8, 0.5, 0.2, P.navy, -1.7, 0.75, 1.95) // respaldo
+      // sala de espera (sofá = modelo 3D)
+      if (!M) {
+        box(g, 1.8, 0.5, 0.7, P.navy, -1.7, 0.45, 1.7)
+        box(g, 1.8, 0.5, 0.2, P.navy, -1.7, 0.75, 1.95)
+      }
       box(g, 0.8, 0.4, 0.8, P.wood, 0, 0.3, 1.9) // mesa de centro
       plant(g, 2.2, 1.9, 1.0)
     },
@@ -300,31 +304,37 @@ export function buildWorld(THREE, options = {}) {
     },
     abogados(g) {
       rug(g, 5.0, 4.0)
-      deskWithChair(g, -1.4, -0.6, 0)
-      deskWithChair(g, 1.4, -0.6, 0)
-      deskWithChair(g, 0, 1.4, Math.PI)
+      if (!M) {
+        deskWithChair(g, -1.4, -0.6, 0)
+        deskWithChair(g, 1.4, -0.6, 0)
+        deskWithChair(g, 0, 1.4, Math.PI)
+      }
       // divisores de vidrio
       box(g, 0.06, 1.0, 1.8, P.glass, 0, 0.7, -0.6)
       plant(g, 2.4, 1.6, 1.0)
     },
     blog(g) {
       rug(g, 4.6, 4.0)
-      bookshelf(g, -1.6, -1.0, 0.2)
-      bookshelf(g, 0, -1.2, 0)
-      bookshelf(g, 1.6, -1.0, -0.2)
-      // rincón de lectura
-      box(g, 1.4, 0.4, 0.9, P.wood, 0.4, 0.35, 1.4) // mesa
+      if (!M) {
+        bookshelf(g, -1.6, -1.0, 0.2)
+        bookshelf(g, 0, -1.2, 0)
+        bookshelf(g, 1.6, -1.0, -0.2)
+        // sillón
+        box(g, 0.9, 0.4, 0.9, P.leather, -1.5, 0.35, 1.3)
+        box(g, 0.9, 0.6, 0.2, P.leather, -1.5, 0.6, 0.95)
+      }
+      // rincón de lectura (mesa auxiliar)
+      box(g, 1.4, 0.4, 0.9, P.wood, 0.4, 0.35, 1.4)
       books(g, 0.4, 0.6, 1.4, 5)
-      // sillón
-      box(g, 0.9, 0.4, 0.9, P.leather, -1.5, 0.35, 1.3)
-      box(g, 0.9, 0.6, 0.2, P.leather, -1.5, 0.6, 0.95)
       floorLamp(g, -2.4, 1.6)
     },
     agendar(g) {
       rug(g, 5.0, 5.0)
-      // mesa de juntas redonda
-      cyl(g, 1.5, 1.5, 0.16, P.wood, 0, 0.78, 0, 28)
-      cyl(g, 0.4, 0.5, 0.7, P.woodDark, 0, 0.38, 0, 12)
+      // mesa de juntas redonda (= modelo 3D)
+      if (!M) {
+        cyl(g, 1.5, 1.5, 0.16, P.wood, 0, 0.78, 0, 28)
+        cyl(g, 0.4, 0.5, 0.7, P.woodDark, 0, 0.38, 0, 12)
+      }
       for (let i = 0; i < 6; i++) {
         const a = (i / 6) * Math.PI * 2
         chair(g, Math.cos(a) * 2.0, Math.sin(a) * 2.0, -a + Math.PI / 2)
