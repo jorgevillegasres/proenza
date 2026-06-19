@@ -158,7 +158,12 @@ export function buildWorld(THREE, options = {}) {
     parent.add(bulb)
     cyl(parent, 0.26, 0.2, 0.3, P.cream, x, 1.62, z, 16)
   }
+  const plantSlots = []
   const plant = (parent, x, z, s = 1) => {
+    if (M) {
+      plantSlots.push({ parent, x, z, s })
+      return
+    }
     const g = new THREE.Group()
     cyl(g, 0.22, 0.18, 0.4, P.woodDark, 0, 0.2, 0, 12)
     const f = new THREE.Mesh(new THREE.IcosahedronGeometry(0.42, 1), P.leaf)
@@ -271,11 +276,13 @@ export function buildWorld(THREE, options = {}) {
   const builders = {
     recepcion(g) {
       rug(g, 4.4, 4.4)
-      // mostrador en L
-      box(g, 3.0, 1.0, 0.8, P.navy, 0, 0.5, -0.6)
-      box(g, 3.2, 0.14, 1.0, P.wood, 0, 1.05, -0.6)
-      box(g, 0.8, 1.0, 1.6, P.navy, 1.5, 0.5, 0.2)
-      box(g, 1.0, 0.14, 1.7, P.wood, 1.5, 1.05, 0.2)
+      // mostrador (= modelo 3D)
+      if (!M) {
+        box(g, 3.0, 1.0, 0.8, P.navy, 0, 0.5, -0.6)
+        box(g, 3.2, 0.14, 1.0, P.wood, 0, 1.05, -0.6)
+        box(g, 0.8, 1.0, 1.6, P.navy, 1.5, 0.5, 0.2)
+        box(g, 1.0, 0.14, 1.7, P.wood, 1.5, 1.05, 0.2)
+      }
       // pared con letrero PROENZA + diplomas + reloj
       box(g, 3.8, 2.2, 0.16, P.cream, 0, 1.5, -1.4)
       sign(g, 'PROENZA', 'ABOGADOS', 0, 2.0, -1.31, 3.0, 0.95)
@@ -448,7 +455,7 @@ export function buildWorld(THREE, options = {}) {
   // --- decoración suelta (plantas y lámparas de pie) ------------------------
   decorate(THREE, group, P, pointOnSurface, orientTo, stations, plazaDir)
 
-  return { group, stations, radius: RADIUS, pointOnSurface }
+  return { group, stations, radius: RADIUS, pointOnSurface, plantSlots }
 }
 
 function decorate(THREE, group, P, pointOnSurface, orientTo, stations, plazaDir) {

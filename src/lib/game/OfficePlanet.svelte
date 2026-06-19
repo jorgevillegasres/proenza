@@ -20,6 +20,8 @@
   import tableModelUrl from '$lib/assets/models/table.glb'
   import sofaModelUrl from '$lib/assets/models/sofa.glb'
   import armchairModelUrl from '$lib/assets/models/armchair.glb'
+  import counterModelUrl from '$lib/assets/models/counter.glb'
+  import plantModelUrl from '$lib/assets/models/plant.glb'
   const textures = {
     wood: woodGhibli,
     rug: rugGhibli,
@@ -188,6 +190,7 @@
         { url: armchairModelUrl, zone: 'blog', size: 1.2, baseRot: 0, items: [[-1.5, 1.3, 0.6]] },
         { url: tableModelUrl, zone: 'agendar', size: 3.0, baseRot: 0, items: [[0, 0, 0]] },
         { url: sofaModelUrl, zone: 'recepcion', size: 2.2, baseRot: 0, items: [[-1.7, 1.8, 0]] },
+        { url: counterModelUrl, zone: 'recepcion', size: 3.0, baseRot: 0, items: [[0, -0.5, 0]] },
       ]
       ;(async () => {
         let GLTFLoader
@@ -222,6 +225,34 @@
             inst.position.set(x, yOff, z)
             inst.rotation.y = ry + f.baseRot
             zone.add(inst)
+          }
+        }
+
+        // Plantas: un modelo 3D por cada slot recogido en buildWorld.
+        if (world.plantSlots?.length) {
+          let pbase = null
+          try {
+            pbase = (await loader.loadAsync(plantModelUrl)).scene
+          } catch {}
+          if (pbase) {
+            const psize = new THREE.Vector3()
+            new THREE.Box3().setFromObject(pbase).getSize(psize)
+            pbase.scale.setScalar(1.3 / Math.max(psize.x, psize.z, 0.001))
+            pbase.updateMatrixWorld(true)
+            const pyOff = -new THREE.Box3().setFromObject(pbase).min.y
+            pbase.traverse((o) => {
+              if (o.isMesh) {
+                o.castShadow = true
+                o.receiveShadow = true
+              }
+            })
+            for (const slot of world.plantSlots) {
+              const inst = pbase.clone()
+              const s = slot.s || 1
+              inst.scale.multiplyScalar(s)
+              inst.position.set(slot.x, pyOff * s, slot.z)
+              slot.parent.add(inst)
+            }
           }
         }
       })()
