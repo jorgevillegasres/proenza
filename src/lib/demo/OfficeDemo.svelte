@@ -122,6 +122,10 @@
       planeM(X_R - X_LBACK, H, M.wall, (X_R + X_LBACK) / 2, H / 2, HALL_Z1, 0, Math.PI)
       planeM(X_R - X_LBACK, H, M.wall, (X_R + X_LBACK) / 2, H / 2, HALL_Z0 + 0.01, 0, 0)
       planeM(totalZ, H, M.wall, X_LBACK, H / 2, midZ, 0, Math.PI / 2) // pared izquierda exterior
+      // zócalos
+      box(0.05, 0.12, totalZ, M.dark, X_LBACK + 0.03, 0.06, midZ)
+      box(X_R - X_LBACK, 0.12, 0.05, M.dark, (X_R + X_LBACK) / 2, 0.06, HALL_Z0 + 0.05)
+      box(X_R - X_LBACK, 0.12, 0.05, M.dark, (X_R + X_LBACK) / 2, 0.06, HALL_Z1 - 0.05)
 
       // --- ventanal derecho con la ciudad ------------------------------------
       const cityMat = new THREE.MeshBasicMaterial({ color: 0xbcd3e6 })
@@ -178,6 +182,11 @@
         const desk = box(1.6, 0.9, 0.75, M.wood, X_L - 2.2, 0.45, zc, Math.PI / 2)
         box(1.75, 0.06, 0.9, M.deskTop, X_L - 2.2, 0.92, zc, Math.PI / 2)
         const ch = new THREE.Group(); ch.add(new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.1, 0.5), M.dark).translateY(0.46)); ch.add(new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.55, 0.08), M.dark).translateY(0.75).translateZ(-0.22)); ch.position.set(X_L - 3.0, 0, zc); ch.rotation.y = Math.PI / 2; grp.add(ch)
+        // detalle interior: monitor, planta de esquina, diploma en la pared
+        box(0.5, 0.3, 0.04, M.dark, X_L - 2.4, 1.18, zc, Math.PI / 2)
+        box(0.14, 0.16, 0.1, M.dark, X_L - 2.3, 1.0, zc)
+        { const fol = new THREE.Mesh(new THREE.IcosahedronGeometry(0.32, 1), mat(0x2f6f43)); fol.position.set(X_LBACK + 0.55, 0.62, zc + 1.05); fol.scale.y = 1.35; grp.add(fol); box(0.26, 0.34, 0.26, M.dark, X_LBACK + 0.55, 0.17, zc + 1.05) }
+        box(0.45, 0.6, 0.04, mat(0xc6a05a, { metalness: 0.25, roughness: 0.4 }), X_LBACK + 0.05, 1.75, zc - 0.7, Math.PI / 2)
         // letrero colgante con el nombre
         const sign = textSign(s.label.toUpperCase(), s.sub, 2.4, 0.62, 0x8fd0ff)
         sign.position.set(X_L + 0.04, 2.25, zc); sign.rotation.y = Math.PI / 2; grp.add(sign)
@@ -212,7 +221,13 @@
       egg2.add(new THREE.Mesh(new THREE.ConeGeometry(0.04, 0.08, 4), mat(0x33312f)).translateY(0.12).translateX(-0.05))
       egg2.add(new THREE.Mesh(new THREE.ConeGeometry(0.04, 0.08, 4), mat(0x33312f)).translateY(0.12).translateX(0.05))
       egg2.position.set(-2.6, 0.12, HALL_Z0 + 1.0); egg2.userData.egg = '🐱 Encontraste a "Habeas", el gato del despacho.'; grp.add(egg2)
-      const eggs = [egg1, egg2]
+      // 3) Pato de goma en el mostrador
+      const egg3 = new THREE.Group()
+      egg3.add(new THREE.Mesh(new THREE.SphereGeometry(0.1, 12, 12), mat(0xf4c430)))
+      egg3.add(new THREE.Mesh(new THREE.SphereGeometry(0.06, 10, 10), mat(0xf4c430)).translateY(0.1).translateZ(0.05))
+      egg3.add(new THREE.Mesh(new THREE.ConeGeometry(0.03, 0.07, 8), mat(0xe8732a)).translateY(0.1).translateZ(0.13).rotateX(Math.PI / 2))
+      egg3.position.set(-0.2, 1.18, HALL_Z0 + 1.5); egg3.userData.egg = '🦆 El pato de goma — el verdadero socio principal del despacho.'; grp.add(egg3)
+      const eggs = [egg1, egg2, egg3]
 
       // --- primera persona ---------------------------------------------------
       const eye = 1.62
@@ -439,5 +454,17 @@
   .tag { font-size: 0.7rem; color: #1b4d89; text-transform: capitalize; }
   .back { background: none; border: 0; color: #1b4d89; font-weight: 600; cursor: pointer; padding: 0 0 0.6rem; }
   .prose :global(h2) { font-size: 1.1rem; margin-top: 1.2rem; }
-  @media (max-width: 640px) { .explore { right: 50%; transform: translate(50%, 0); top: auto; bottom: 12vh; width: 86vw; max-width: 320px; } .row { grid-template-columns: 1fr; } .grid { grid-template-columns: 1fr; } }
+  @media (max-width: 720px) {
+    .explore { top: 60px; right: 8px; left: auto; bottom: auto; transform: none; width: 165px; padding: 0.8rem; max-height: 50vh; overflow: auto; }
+    .explore h2 { font-size: 0.82rem; margin-bottom: 0.5rem; }
+    .explore .poi { display: none; }
+    .explore ul { font-size: 0.74rem; gap: 0.2rem; margin-bottom: 0.5rem; }
+    .explore .next { font-size: 0.72rem; margin-bottom: 0.6rem; }
+    .cta { padding: 0.55rem; font-size: 0.72rem; }
+    .nav nav { display: none; }
+    .nav { top: 12px; left: 12px; right: 12px; }
+    .prompt { bottom: 17vh; font-size: 0.82rem; }
+    .row { grid-template-columns: 1fr; }
+    .grid { grid-template-columns: 1fr; }
+  }
 </style>
