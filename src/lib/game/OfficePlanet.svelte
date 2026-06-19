@@ -22,6 +22,8 @@
   import armchairModelUrl from '$lib/assets/models/armchair.glb'
   import counterModelUrl from '$lib/assets/models/counter.glb'
   import plantModelUrl from '$lib/assets/models/plant.glb'
+  import chairModelUrl from '$lib/assets/models/chair.glb'
+  import statueModelUrl from '$lib/assets/models/statue.glb'
   const textures = {
     wood: woodGhibli,
     rug: rugGhibli,
@@ -194,6 +196,8 @@
         { url: deskModelUrl, zone: 'caso', size: 2.0, baseRot: 0, items: [[0, -0.4, 0]] },
         { url: sofaModelUrl, zone: 'areas', size: 2.6, baseRot: 0, items: [[0, 0.6, 0]] },
         { url: armchairModelUrl, zone: 'contacto', size: 1.4, baseRot: 0, items: [[0, 0.5, 0]] },
+        { url: chairModelUrl, zone: 'abogados', size: 1.0, baseRot: 0, items: [[-1.4, -1.25, 0], [1.4, -1.25, 0], [0, 2.05, Math.PI]] },
+        { url: statueModelUrl, lobby: true, size: 1.7, baseRot: 0, items: [[0, 0, 0]] },
       ]
       ;(async () => {
         let GLTFLoader
@@ -204,7 +208,7 @@
         }
         const loader = new GLTFLoader()
         for (const f of FURNITURE) {
-          const zone = stations.find((s) => s.id === f.zone)?.group
+          const zone = f.lobby ? world.lobby : stations.find((s) => s.id === f.zone)?.group
           if (!zone) continue
           let base
           try {

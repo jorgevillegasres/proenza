@@ -258,13 +258,15 @@ export function buildWorld(THREE, options = {}) {
   const lobby = new THREE.Group()
   placeOnSurface(lobby, plazaDir)
   rug(lobby, 5.2, 5.2)
-  // pedestal + balanza
-  cyl(lobby, 0.5, 0.62, 0.5, P.cream, 0, 0.25, 0, 20)
-  cyl(lobby, 0.05, 0.05, 1.0, P.gold, 0, 0.95, 0, 10)
-  box(lobby, 1.5, 0.05, 0.05, P.gold, 0, 1.4, 0)
-  for (const sx of [-0.6, 0.6]) {
-    cyl(lobby, 0.02, 0.02, 0.3, P.gold, sx, 1.25, 0, 6)
-    cyl(lobby, 0.18, 0.18, 0.06, P.gold, sx, 1.1, 0, 14)
+  // pedestal + balanza (= modelo 3D de la balanza de la justicia)
+  if (!M) {
+    cyl(lobby, 0.5, 0.62, 0.5, P.cream, 0, 0.25, 0, 20)
+    cyl(lobby, 0.05, 0.05, 1.0, P.gold, 0, 0.95, 0, 10)
+    box(lobby, 1.5, 0.05, 0.05, P.gold, 0, 1.4, 0)
+    for (const sx of [-0.6, 0.6]) {
+      cyl(lobby, 0.02, 0.02, 0.3, P.gold, sx, 1.25, 0, 6)
+      cyl(lobby, 0.18, 0.18, 0.06, P.gold, sx, 1.1, 0, 14)
+    }
   }
   floorLamp(lobby, -2, 1.6)
   floorLamp(lobby, 2, -1.6)
@@ -457,7 +459,7 @@ export function buildWorld(THREE, options = {}) {
   // --- decoración suelta (plantas y lámparas de pie) ------------------------
   decorate(THREE, group, P, pointOnSurface, orientTo, stations, plazaDir)
 
-  return { group, stations, radius: RADIUS, pointOnSurface, plantSlots }
+  return { group, stations, radius: RADIUS, pointOnSurface, plantSlots, lobby }
 }
 
 function decorate(THREE, group, P, pointOnSurface, orientTo, stations, plazaDir) {
