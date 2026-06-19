@@ -7,16 +7,14 @@
 
   // Texturas pintadas a mano (Higgsfield). Para añadir una: guárdala en
   // src/lib/assets/textures/, impórtala aquí y añádela al objeto `textures`.
-  import grassGhibli from '$lib/assets/textures/grass-ghibli.jpg'
-  import pavingGhibli from '$lib/assets/textures/paving-ghibli.jpg'
   import woodGhibli from '$lib/assets/textures/wood-ghibli.jpg'
+  import rugGhibli from '$lib/assets/textures/rug-ghibli.jpg'
   import marbleGhibli from '$lib/assets/textures/marble-ghibli.jpg'
   import foliageGhibli from '$lib/assets/textures/foliage-ghibli.jpg'
   import skyGhibli from '$lib/assets/textures/sky-ghibli.jpg'
   const textures = {
-    grass: grassGhibli,
-    paving: pavingGhibli,
     wood: woodGhibli,
+    rug: rugGhibli,
     marble: marbleGhibli,
     foliage: foliageGhibli,
   }
