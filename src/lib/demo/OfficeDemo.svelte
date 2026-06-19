@@ -4,6 +4,7 @@
   import { abogados, initials } from '$lib/data/abogados.js'
   import { posts, formatDate } from '$lib/data/posts.js'
   import logoUrl from '$lib/assets/brand/logo.svg'
+  import logoLightUrl from '$lib/assets/brand/logo-light.svg'
   import ambienteUrl from '$lib/assets/audio/ambiente.m4a'
 
   let { cityUrl = '', envUrl = '' } = $props()
@@ -38,7 +39,7 @@
       z: 6.5 - i * 3.5, // 6.5, 3, -0.5, -4
     })),
     { id: 'recepcion', type: 'reception', label: 'Recepción', sub: 'Deja tu caso para análisis', z: -8, center: true },
-    { id: 'biblioteca', type: 'library', label: 'Biblioteca', sub: 'Artículos y blog', z: 8.5, right: true },
+    { id: 'biblioteca', type: 'library', label: 'Biblioteca', sub: 'Artículos y blog', z: 9.4 },
   ]
   stationsUI = STATIONS.map((s) => ({ id: s.id, label: s.label, type: s.type }))
 
@@ -174,10 +175,20 @@
         const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshStandardMaterial({ map: tex, emissive: em, emissiveMap: tex, emissiveIntensity: 1.5, transparent: true }))
         return m
       }
+      // Letrero a partir de una imagen (el logo) — retroiluminado.
+      const imgSign = (url, w, h) => {
+        const c = document.createElement('canvas'); c.width = 1024; c.height = Math.round((1024 * h) / w)
+        const ctx = c.getContext('2d')
+        const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace
+        const img = new Image()
+        img.onload = () => { ctx.clearRect(0, 0, c.width, c.height); ctx.drawImage(img, 0, 0, c.width, c.height); tex.needsUpdate = true }
+        img.src = url
+        return new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshStandardMaterial({ map: tex, emissive: 0xfff0d8, emissiveMap: tex, emissiveIntensity: 1.25, transparent: true }))
+      }
 
       // --- recepción (fondo) -------------------------------------------------
       planeM(X_R - X_LBACK, H, M.wood, (X_R + X_LBACK) / 2 + 1.5, H / 2, HALL_Z0 + 0.02, 0, 0) // muro de madera
-      { const sign = textSign('PROENZA', 'ABOGADOS', 3.4, 0.9); sign.position.set(-1.2, 2.0, HALL_Z0 + 0.06); grp.add(sign) }
+      { const sign = imgSign(logoLightUrl, 3.7, 1.0); sign.position.set(-1.2, 2.0, HALL_Z0 + 0.06); grp.add(sign) }
       { // mostrador de mármol
         const counter = new THREE.Mesh(new THREE.BoxGeometry(3.4, 1.05, 0.9), mat(0xd9dde2, { roughness: 0.2 }))
         counter.position.set(-1.2, 0.525, HALL_Z0 + 1.5); counter.castShadow = counter.receiveShadow = true; grp.add(counter)
@@ -210,15 +221,59 @@
         proxPoints.push({ s, x: X_L + 0.9, z: zc })
       }
 
-      // --- biblioteca (lado derecho, cerca de la entrada) --------------------
+      // --- biblioteca (sala a la izquierda, junto a la entrada) --------------
       {
-        const zc = 8.5
-        box(0.5, 2.6, 3.0, M.wood, X_R - 0.4, 1.3, zc) // mueble de fondo
-        for (let i = 0; i < 4; i++) box(0.42, 0.08, 2.8, M.deskTop, X_R - 0.4, 0.6 + i * 0.6, zc)
-        for (let i = 0; i < 4; i++) for (let j = 0; j < 9; j++) { const cc = [0x6b4a2b, 0x355c7d, 0x99403a, 0x3f6f4f, 0x7a5aa0][(i + j) % 5]; box(0.16, 0.42, 0.14, mat(cc), X_R - 0.62, 0.85 + i * 0.6, zc - 1.3 + j * 0.32) }
-        const sign = textSign('BIBLIOTECA', 'Blog jurídico', 2.0, 0.55, 0x8fd0ff)
-        sign.position.set(X_R - 0.05, 2.25, zc); sign.rotation.y = -Math.PI / 2; grp.add(sign)
-        proxPoints.push({ s: STATIONS.find((x) => x.id === 'biblioteca'), x: X_R - 1.1, z: zc })
+        const zc = 9.4, hd = 1.3
+        box(X_L - X_LBACK, H, 0.08, M.wall, (X_L + X_LBACK) / 2, H / 2, zc - hd)
+        box(X_L - X_LBACK, H, 0.08, M.wall, (X_L + X_LBACK) / 2, H / 2, zc + hd)
+        planeM(2 * hd, H, M.glass, X_L, H / 2, zc, 0, Math.PI / 2)
+        box(0.06, H, 0.06, M.frame, X_L, H / 2, zc - hd)
+        box(0.06, H, 0.06, M.frame, X_L, H / 2, zc + hd)
+        // estanterías llenas de libros en la pared del fondo (dos cuerpos)
+        const cols = [0x6b4a2b, 0x355c7d, 0x99403a, 0x3f6f4f, 0x7a5aa0, 0x9c6b2e]
+        for (const zz of [zc - 0.72, zc + 0.72]) {
+          box(0.5, 2.5, 1.3, M.wood, X_LBACK + 0.3, 1.25, zz)
+          for (let i = 0; i < 5; i++) box(0.42, 0.07, 1.2, M.deskTop, X_LBACK + 0.3, 0.5 + i * 0.5, zz)
+          for (let i = 0; i < 5; i++) for (let j = 0; j < 5; j++) box(0.16, 0.38, 0.13, mat(cols[(i + j) % cols.length]), X_LBACK + 0.5, 0.72 + i * 0.5, zz - 0.5 + j * 0.26)
+        }
+        // alfombra + mesa de lectura central + dos sillones enfrentados
+        box(2.4, 0.03, 2.0, mat(0x6f3b34, { roughness: 0.95 }), X_LBACK + 2.7, 0.015, zc)
+        box(1.3, 0.45, 0.8, M.wood, X_LBACK + 2.7, 0.42, zc)
+        box(1.4, 0.05, 0.9, M.deskTop, X_LBACK + 2.7, 0.66, zc)
+        const aMat = mat(0x394049, { roughness: 0.7 })
+        for (const dz of [-1.0, 1.0]) {
+          box(0.78, 0.4, 0.78, aMat, X_LBACK + 2.7, 0.3, zc + dz)
+          box(0.78, 0.55, 0.16, aMat, X_LBACK + 2.7, 0.62, zc + dz + 0.31 * Math.sign(dz))
+        }
+        // lámpara de pie en la esquina
+        box(0.05, 1.5, 0.05, M.frame, X_LBACK + 0.7, 0.75, zc + hd - 0.3)
+        box(0.34, 0.26, 0.34, M.lamp, X_LBACK + 0.7, 1.6, zc + hd - 0.3)
+        // letrero colgante
+        const sign = textSign('BIBLIOTECA', 'Blog jurídico', 2.3, 0.6, 0x8fd0ff)
+        sign.position.set(X_L + 0.04, 2.25, zc); sign.rotation.y = Math.PI / 2; grp.add(sign)
+        box(0.02, 0.5, 0.02, M.frame, X_L + 0.04, 2.7, zc)
+        proxPoints.push({ s: STATIONS.find((x) => x.id === 'biblioteca'), x: X_L + 0.9, z: zc })
+      }
+
+      // --- sala de espera junto al ventanal (derecha, entrada) ---------------
+      {
+        const zc = 8.8, aMat = mat(0x2c3138, { roughness: 0.7 })
+        box(2.2, 0.03, 1.8, mat(0x4a4640, { roughness: 0.95 }), X_R - 1.4, 0.015, zc) // alfombra
+        for (const dz of [-0.75, 0.75]) {
+          box(0.8, 0.4, 0.8, aMat, X_R - 1.0, 0.3, zc + dz)         // asiento mirando al ventanal
+          box(0.16, 0.55, 0.8, aMat, X_R - 1.38, 0.62, zc + dz)     // respaldo
+        }
+        box(0.55, 0.4, 0.55, M.wood, X_R - 2.1, 0.2, zc)            // mesa de centro
+        { const fol = new THREE.Mesh(new THREE.IcosahedronGeometry(0.45, 1), mat(0x2f6f43)); fol.position.set(X_R - 1.0, 0.85, zc - 1.4); fol.scale.y = 1.5; grp.add(fol); box(0.32, 0.5, 0.32, M.dark, X_R - 1.0, 0.25, zc - 1.4) }
+      }
+
+      // --- rincón de café (izquierda, junto a la recepción) ------------------
+      {
+        const zc = -6.2
+        box(1.0, 0.9, 0.5, M.wood, X_LBACK + 0.5, 0.45, zc)
+        box(1.05, 0.05, 0.55, M.deskTop, X_LBACK + 0.5, 0.92, zc)
+        box(0.2, 0.3, 0.2, M.dark, X_LBACK + 0.5, 1.1, zc + 0.15) // máquina de café
+        { const fol = new THREE.Mesh(new THREE.IcosahedronGeometry(0.4, 1), mat(0x2f6f43)); fol.position.set(X_LBACK + 0.5, 0.8, zc - 1.2); fol.scale.y = 1.4; grp.add(fol); box(0.3, 0.45, 0.3, M.dark, X_LBACK + 0.5, 0.22, zc - 1.2) }
       }
       // recepción punto de proximidad
       proxPoints.push({ s: STATIONS.find((x) => x.id === 'recepcion'), x: -1.2, z: HALL_Z0 + 3.0 })
@@ -228,7 +283,7 @@
       const focusMap = {}
       for (const a of STATIONS.filter((x) => x.type === 'office')) focusMap[a.id] = { eye: V(X_L + 1.0, 1.6, a.z), look: V(X_L - 2.6, 1.35, a.z) }
       focusMap.recepcion = { eye: V(-1.2, 1.6, HALL_Z0 + 3.8), look: V(-1.2, 1.85, HALL_Z0 + 0.2) }
-      focusMap.biblioteca = { eye: V(X_R - 1.7, 1.6, 8.5), look: V(X_R - 0.4, 1.5, 8.5) }
+      focusMap.biblioteca = { eye: V(X_L + 1.0, 1.6, 9.4), look: V(X_LBACK + 1.5, 1.4, 9.4) }
       const _dummy = new THREE.Object3D()
       let wasOpen = false
 
@@ -252,7 +307,10 @@
       egg3.add(new THREE.Mesh(new THREE.SphereGeometry(0.06, 10, 10), mat(0xf4c430)).translateY(0.1).translateZ(0.05))
       egg3.add(new THREE.Mesh(new THREE.ConeGeometry(0.03, 0.07, 8), mat(0xe8732a)).translateY(0.1).translateZ(0.13).rotateX(Math.PI / 2))
       egg3.position.set(-0.2, 1.18, HALL_Z0 + 1.5); egg3.userData.egg = '🦆 El pato de goma — el verdadero socio principal del despacho.'; grp.add(egg3)
-      const eggs = [egg1, egg2, egg3]
+      // 4º: un libro escondido en la mesa de la biblioteca
+      const egg4 = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.05, 0.16), mat(0x8a1f2b))
+      egg4.position.set(X_LBACK + 2.7, 0.71, 9.4); egg4.userData.egg = '📖 "Código Civil anotado" — con un billete de lotería de marcapáginas. 🍀'; grp.add(egg4)
+      const eggs = [egg1, egg2, egg3, egg4]
 
       // --- primera persona ---------------------------------------------------
       const eye = 1.62
