@@ -1,21 +1,22 @@
-// Datos institucionales del despacho. Centralizados aquí para reemplazarlos
-// fácilmente cuando lleguen los datos reales (logo, teléfonos, dirección).
+// Datos institucionales reales del despacho.
 export const site = {
   name: 'Proenza Abogados',
   shortName: 'Proenza',
   tagline: 'Asesoría y representación jurídica en todas las áreas del derecho civil colombiano.',
   description:
     'Proenza Abogados es un despacho jurídico colombiano especializado en derecho civil: familia, sucesiones, contratos, bienes, obligaciones y responsabilidad civil. Asesoría clara y representación cercana.',
-  // Datos de contacto (placeholder — reemplazar por los reales).
-  phone: '+57 300 000 0000',
-  whatsapp: '573000000000', // sólo dígitos, formato internacional
-  email: 'contacto@proenzabogados.co',
-  address: 'Calle 00 # 00-00, Bogotá D.C., Colombia',
-  hours: 'Lun – Vie · 8:00 a. m. – 6:00 p. m.',
-  city: 'Bogotá',
+  phone: '(+57) 324 158-6919',
+  phone2: '(+57) 304 494-5357',
+  whatsapp: '573241586919', // sólo dígitos, formato internacional
+  email: 'contacto@proenzalegal.com',
+  address: 'Calle 11 # 3-58, Of. 508',
+  hours: 'Lun – Vie · 9:00–11:00 y 14:00–16:00',
+  city: 'Colombia',
   social: {
-    linkedin: '',
-    instagram: '',
+    facebook: 'https://www.facebook.com/people/Abogados-Proenza/61555305772031/',
+    instagram: 'https://www.instagram.com/abogadosproenza/',
+    x: 'https://x.com/abogadosproenza',
+    youtube: 'https://www.youtube.com/@PROENZAAbogados',
   },
 }
 

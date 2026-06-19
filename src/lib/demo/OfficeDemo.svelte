@@ -3,6 +3,7 @@
   import { site, whatsappLink } from '$lib/data/site.js'
   import { abogados, initials } from '$lib/data/abogados.js'
   import { posts, formatDate } from '$lib/data/posts.js'
+  import logoUrl from '$lib/assets/brand/logo.svg'
 
   let { cityUrl = '', envUrl = '' } = $props()
 
@@ -320,8 +321,17 @@
   {#if !failed}<canvas bind:this={canvas}></canvas>{/if}
 
   <header class="nav">
-    <nav>INICIO · SERVICIOS · NUESTRO EQUIPO · CLIENTES · CONTACTO</nav>
-    <div class="contact"><span>{site.phone}</span><span>{site.email}</span></div>
+    <div class="brand"><img src={logoUrl} alt="Proenza Abogados" /></div>
+    <div class="contact">
+      <span>{site.phone}</span>
+      <span>{site.email}</span>
+      <div class="social">
+        <a href={site.social.instagram} target="_blank" rel="noopener" aria-label="Instagram">IG</a>
+        <a href={site.social.facebook} target="_blank" rel="noopener" aria-label="Facebook">FB</a>
+        <a href={site.social.x} target="_blank" rel="noopener" aria-label="X">X</a>
+        <a href={site.social.youtube} target="_blank" rel="noopener" aria-label="YouTube">YT</a>
+      </div>
+    </div>
   </header>
 
   <!-- panel EXPLORE NUESTRO ESPACIO -->
@@ -409,10 +419,14 @@
 <style>
   .demo { position: fixed; inset: 0; overflow: hidden; background: #cdd6df; font-family: var(--ui-font, system-ui, sans-serif); }
   canvas { display: block; width: 100%; height: 100%; cursor: grab; touch-action: none; }
-  .nav { position: absolute; top: 16px; left: 16px; right: 16px; display: flex; justify-content: space-between; gap: 1rem; pointer-events: none; }
-  .nav nav, .nav .contact span { background: rgba(255,255,255,0.14); backdrop-filter: blur(8px); color: #fff; font-size: 0.7rem; letter-spacing: 0.06em; padding: 0.55rem 0.9rem; border-radius: 8px; text-shadow: 0 1px 4px rgba(0,0,0,0.4); }
-  .nav .contact { display: flex; gap: 0.6rem; }
-  .nav .contact span { border-radius: 999px; }
+  .nav { position: absolute; top: 16px; left: 16px; right: 16px; display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; pointer-events: none; }
+  .brand { background: rgba(255,255,255,0.88); backdrop-filter: blur(8px); border-radius: 10px; padding: 0.5rem 0.9rem; box-shadow: 0 6px 20px rgba(0,0,0,0.15); pointer-events: auto; }
+  .brand img { height: 30px; display: block; }
+  .nav .contact { display: flex; flex-direction: column; align-items: flex-end; gap: 0.4rem; pointer-events: auto; }
+  .nav .contact span { background: rgba(255,255,255,0.16); backdrop-filter: blur(8px); color: #fff; font-size: 0.72rem; padding: 0.4rem 0.8rem; border-radius: 999px; text-shadow: 0 1px 4px rgba(0,0,0,0.4); }
+  .social { display: flex; gap: 0.35rem; }
+  .social a { width: 28px; height: 28px; display: grid; place-items: center; border-radius: 50%; background: rgba(255,255,255,0.18); backdrop-filter: blur(8px); color: #fff; font-size: 0.62rem; font-weight: 700; text-shadow: 0 1px 3px rgba(0,0,0,0.4); }
+  .social a:hover { background: rgba(255,255,255,0.35); }
   .explore { position: absolute; top: 50%; right: 4vw; transform: translateY(-50%); width: 270px; background: rgba(20,28,38,0.32); backdrop-filter: blur(14px); border: 1px solid rgba(255,255,255,0.28); border-radius: 16px; padding: 1.3rem; color: #fff; text-shadow: 0 1px 4px rgba(0,0,0,0.5); box-shadow: 0 18px 50px rgba(0,0,0,0.3); }
   .explore h2 { font-size: 1rem; margin: 0 0 0.8rem; }
   .explore .poi { font-size: 0.78rem; opacity: 0.85; margin: 0 0 0.4rem; }
@@ -461,7 +475,9 @@
     .explore ul { font-size: 0.74rem; gap: 0.2rem; margin-bottom: 0.5rem; }
     .explore .next { font-size: 0.72rem; margin-bottom: 0.6rem; }
     .cta { padding: 0.55rem; font-size: 0.72rem; }
-    .nav nav { display: none; }
+    .brand img { height: 22px; }
+    .social { display: none; }
+    .nav .contact span { font-size: 0.64rem; padding: 0.32rem 0.6rem; }
     .nav { top: 12px; left: 12px; right: 12px; }
     .prompt { bottom: 17vh; font-size: 0.82rem; }
     .row { grid-template-columns: 1fr; }
