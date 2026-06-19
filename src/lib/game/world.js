@@ -304,8 +304,8 @@ export function buildWorld(THREE, options = {}) {
       box(g, 5.0, 2.2, 0.2, P.cream, 0, 1.3, -1.4)
       const cols = [0x2e6fb7, 0x1b4d89, 0xc29a4b, 0x3f7d54, 0x9aa0a8, 0xb04a3a, 0x7a5aa0]
       for (let i = 0; i < 7; i++) framedPic(g, -2.0 + i * 0.66, 1.5, -1.28, 0, 0.5, 0.62, cols[i])
-      // bancas para consultar
-      box(g, 3.2, 0.4, 0.5, P.wood, 0, 0.4, 0.6)
+      // banca para consultar (= sofá 3D)
+      if (!M) box(g, 3.2, 0.4, 0.5, P.wood, 0, 0.4, 0.6)
       plant(g, 2.5, 0.0, 1.0)
       plant(g, -2.5, 0.0, 1.0)
     },
@@ -356,12 +356,14 @@ export function buildWorld(THREE, options = {}) {
     },
     caso(g) {
       rug(g, 4.0, 3.4)
-      // escritorio de admisión
-      box(g, 2.4, 1.0, 0.9, P.navy, 0, 0.5, -0.4)
-      box(g, 2.6, 0.14, 1.1, P.wood, 0, 1.05, -0.4)
-      box(g, 0.6, 0.3, 0.4, P.paper, 0.6, 1.2, -0.4) // bandeja de entrada
-      box(g, 0.5, 0.36, 0.36, P.paper, -0.6, 1.2, -0.4) // carpetas
-      bankerLamp(g, 0, 1.1, -0.6)
+      // escritorio de admisión (= modelo 3D)
+      if (!M) {
+        box(g, 2.4, 1.0, 0.9, P.navy, 0, 0.5, -0.4)
+        box(g, 2.6, 0.14, 1.1, P.wood, 0, 1.05, -0.4)
+        box(g, 0.6, 0.3, 0.4, P.paper, 0.6, 1.2, -0.4)
+        box(g, 0.5, 0.36, 0.36, P.paper, -0.6, 1.2, -0.4)
+        bankerLamp(g, 0, 1.1, -0.6)
+      }
       chair(g, 0, 0.6, 0)
       framedPic(g, 0, 1.7, -1.0, 0, 1.0, 0.5)
       box(g, 2.6, 1.6, 0.16, P.cream, 0, 1.4, -1.1)
@@ -373,7 +375,7 @@ export function buildWorld(THREE, options = {}) {
       box(g, 2.6, 1.8, 0.18, P.cream, 0, 1.1, -0.6)
       framedPic(g, -0.7, 1.3, -0.5, 0, 0.7, 0.5, 0x2e6fb7)
       framedPic(g, 0.7, 1.3, -0.5, 0, 0.7, 0.5, 0xc29a4b)
-      box(g, 2.0, 0.4, 0.5, P.wood, 0, 0.4, 0.5)
+      if (!M) box(g, 2.0, 0.4, 0.5, P.wood, 0, 0.4, 0.5) // banca (= sillón 3D)
       floorLamp(g, 1.7, 0.3)
       plant(g, -1.7, 0.4, 0.9)
     },

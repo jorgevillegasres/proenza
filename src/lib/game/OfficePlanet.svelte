@@ -191,6 +191,9 @@
         { url: tableModelUrl, zone: 'agendar', size: 3.0, baseRot: 0, items: [[0, 0, 0]] },
         { url: sofaModelUrl, zone: 'recepcion', size: 2.2, baseRot: 0, items: [[-1.7, 1.8, 0]] },
         { url: counterModelUrl, zone: 'recepcion', size: 3.0, baseRot: 0, items: [[0, -0.5, 0]] },
+        { url: deskModelUrl, zone: 'caso', size: 2.0, baseRot: 0, items: [[0, -0.4, 0]] },
+        { url: sofaModelUrl, zone: 'areas', size: 2.6, baseRot: 0, items: [[0, 0.6, 0]] },
+        { url: armchairModelUrl, zone: 'contacto', size: 1.4, baseRot: 0, items: [[0, 0.5, 0]] },
       ]
       ;(async () => {
         let GLTFLoader
