@@ -53,6 +53,13 @@
   }
   let selPost = $state(null)
 
+  // Teclas (compartidas con los botones táctiles).
+  const keys = new Set()
+  function hold(k, on) {
+    if (on) keys.add(k)
+    else keys.delete(k)
+  }
+
   onMount(() => {
     let cleanup = () => {}
     let cancelled = false
@@ -67,7 +74,7 @@
       renderer.shadowMap.enabled = true
       renderer.shadowMap.type = THREE.PCFSoftShadowMap
       renderer.toneMapping = THREE.ACESFilmicToneMapping
-      renderer.toneMappingExposure = 0.9
+      renderer.toneMappingExposure = 0.82
 
       const scene = new THREE.Scene()
       scene.background = new THREE.Color(0xcdd6df)
@@ -81,16 +88,16 @@
           tex.mapping = THREE.EquirectangularReflectionMapping
           tex.colorSpace = THREE.SRGBColorSpace
           scene.environment = pmrem.fromEquirectangular(tex).texture
-          if ('environmentIntensity' in scene) scene.environmentIntensity = 0.8
+          if ('environmentIntensity' in scene) scene.environmentIntensity = 0.65
           tex.dispose(); pmrem.dispose()
         })
       }
 
       const mat = (c, o = {}) => new THREE.MeshStandardMaterial({ color: c, ...o })
       const M = {
-        floor: mat(0xb4b9bf, { roughness: 0.22 }),
-        wall: mat(0xf2f2f0, { roughness: 0.9 }),
-        ceil: mat(0xededed, { roughness: 1 }),
+        floor: mat(0xacb2b8, { roughness: 0.18 }),
+        wall: mat(0xe6e4df, { roughness: 0.92 }),
+        ceil: mat(0xe2e1dd, { roughness: 1 }),
         wood: mat(0x4a2f1d, { roughness: 0.45, metalness: 0.1 }),
         deskTop: mat(0x2a1c12, { roughness: 0.3 }),
         glass: new THREE.MeshStandardMaterial({ color: 0xcfe0ec, roughness: 0.05, transparent: true, opacity: 0.16 }),
@@ -211,7 +218,6 @@
       const eye = 1.62
       const cpos = new THREE.Vector3(0, eye, HALL_Z1 - 1.5)
       let yaw = 0, pitch = -0.03
-      const keys = new Set()
       const onKD = (e) => { const k = e.key.toLowerCase(); if (['w', 'a', 's', 'd', ' '].includes(k)) e.preventDefault(); if (k === 'escape') { closeStation(); return } if (open) return; if (k === 'e' && active) { openStation(STATIONS.find((x) => x.id === active.id)); return } keys.add(k) }
       const onKU = (e) => keys.delete(e.key.toLowerCase())
       addEventListener('keydown', onKD); addEventListener('keyup', onKU)
@@ -257,15 +263,20 @@
         raf = requestAnimationFrame(frame)
         const dt = Math.min(clock.getDelta(), 0.05)
         if (!open) {
-          camera.rotation.order = 'YXZ'; camera.rotation.y = yaw; camera.rotation.x = pitch
-          fwd.set(-Math.sin(yaw), 0, -Math.cos(yaw)); rgt.set(Math.cos(yaw), 0, -Math.sin(yaw))
-          let mx = 0, mz = 0
+          // A/D giran la cámara; W/S avanzan/retroceden (intuitivo para un pasillo).
+          let turn = 0, mz = 0
           if (keys.has('w') || keys.has('arrowup')) mz += 1
           if (keys.has('s') || keys.has('arrowdown')) mz -= 1
-          if (keys.has('d') || keys.has('arrowright')) mx += 1
-          if (keys.has('a') || keys.has('arrowleft')) mx -= 1
-          tv.set(0, 0, 0).addScaledVector(fwd, mz).addScaledVector(rgt, mx)
-          if (tv.lengthSq() > 0) { tv.normalize(); cpos.addScaledVector(tv, 3.4 * dt); cpos.x = Math.max(X_L + 0.5, Math.min(X_R - 0.5, cpos.x)); cpos.z = Math.max(HALL_Z0 + 1.2, Math.min(HALL_Z1 - 0.6, cpos.z)) }
+          if (keys.has('a') || keys.has('arrowleft')) turn += 1
+          if (keys.has('d') || keys.has('arrowright')) turn -= 1
+          yaw += turn * 1.9 * dt
+          camera.rotation.order = 'YXZ'; camera.rotation.y = yaw; camera.rotation.x = pitch
+          fwd.set(-Math.sin(yaw), 0, -Math.cos(yaw))
+          if (mz !== 0) {
+            cpos.addScaledVector(fwd, mz * 3.4 * dt)
+            cpos.x = Math.max(X_L + 0.5, Math.min(X_R - 0.5, cpos.x))
+            cpos.z = Math.max(HALL_Z0 + 1.2, Math.min(HALL_Z1 - 0.6, cpos.z))
+          }
           cpos.y = eye; camera.position.copy(cpos)
           // proximidad
           let best = null, bd = 2.6
@@ -321,8 +332,19 @@
 
   {#if toast}<div class="toast">{toast}</div>{/if}
 
-  <div class="hint">EXPLORA EL DESPACHO USANDO <b>W, A, S, D</b> O ARRASTRA</div>
+  <div class="hint"><b>W/S</b> avanzar · <b>A/D</b> girar · arrastra para mirar</div>
   <div class="badge">PROENZA · despacho virtual</div>
+
+  <!-- controles táctiles -->
+  <div class="mctrl">
+    <button aria-label="Girar izquierda" onpointerdown={() => hold('a', true)} onpointerup={() => hold('a', false)} onpointerleave={() => hold('a', false)} oncontextmenu={(e) => e.preventDefault()}>◀</button>
+    <div class="mcol">
+      <button aria-label="Avanzar" onpointerdown={() => hold('w', true)} onpointerup={() => hold('w', false)} onpointerleave={() => hold('w', false)}>▲</button>
+      <button aria-label="Retroceder" onpointerdown={() => hold('s', true)} onpointerup={() => hold('s', false)} onpointerleave={() => hold('s', false)}>▼</button>
+    </div>
+    <button aria-label="Girar derecha" onpointerdown={() => hold('d', true)} onpointerup={() => hold('d', false)} onpointerleave={() => hold('d', false)}>▶</button>
+  </div>
+
   {#if !ready && !failed}<div class="loader">Entrando al despacho…</div>{/if}
 
   <!-- PANEL de interacción -->
@@ -389,6 +411,12 @@
   .toast { position: absolute; left: 50%; top: 12%; transform: translateX(-50%); background: rgba(20,28,38,0.9); color: #fff; padding: 0.7rem 1.1rem; border-radius: 12px; font-size: 0.9rem; }
   .hint { position: absolute; right: 16px; bottom: 14px; color: #fff; font-size: 0.64rem; letter-spacing: 0.08em; text-align: right; text-shadow: 0 1px 4px rgba(0,0,0,0.5); }
   .badge { position: absolute; left: 16px; bottom: 14px; color: rgba(255,255,255,0.85); font-size: 0.64rem; letter-spacing: 0.08em; text-shadow: 0 1px 4px rgba(0,0,0,0.5); }
+  .mctrl { position: absolute; left: 16px; bottom: 40px; display: none; align-items: center; gap: 8px; z-index: 10; }
+  .mctrl button { width: 50px; height: 50px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.3); background: rgba(20,28,38,0.5); backdrop-filter: blur(6px); color: #fff; font-size: 1.05rem; cursor: pointer; touch-action: none; user-select: none; display: grid; place-items: center; }
+  .mctrl .mcol { display: grid; gap: 6px; }
+  .mctrl .mcol button { height: 44px; }
+  @media (pointer: coarse) { .mctrl { display: flex; } .badge { display: none; } }
+  @media (max-width: 720px) { .mctrl { display: flex; } }
   .loader { position: absolute; inset: 0; display: grid; place-content: center; color: #33414f; }
 
   .overlay { position: absolute; inset: 0; display: flex; justify-content: center; align-items: center; z-index: 20; }
