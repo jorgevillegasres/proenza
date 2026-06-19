@@ -104,7 +104,7 @@
 
       const scene = new THREE.Scene()
       scene.fog = new THREE.FogExp2(0x0b1730, 0.0052)
-      const camera = new THREE.PerspectiveCamera(54, innerWidth / innerHeight, 0.1, 600)
+      const camera = new THREE.PerspectiveCamera(48, innerWidth / innerHeight, 0.1, 600)
 
       // --- cielo ---------------------------------------------------------------
       // Con textura pintada (Higgsfield) la mapeamos sobre la cúpula; si no, queda
@@ -244,6 +244,18 @@
       }
       resize()
 
+      // --- cámara orbital (3ª persona, con giro arrastrando) -------------------
+      let camPitch = 0.5
+      const camDist = mobile ? 8.6 : 7.6
+      const boom = forward.clone().negate() // dirección jugador→cámara (tangente)
+      let pendingYaw = 0
+      let autoFollow = 0 // segundos en que se pausa el auto-seguimiento tras arrastrar
+      const rotateCam = (dx, dy) => {
+        pendingYaw += dx * 0.005
+        camPitch = clamp(camPitch - dy * 0.005, 0.16, 1.05)
+        autoFollow = 1.6
+      }
+
       // --- input ---------------------------------------------------------------
       const onKeyDown = (e) => {
         const k = e.key.toLowerCase()
@@ -259,27 +271,55 @@
       addEventListener('keyup', onKeyUp)
       addEventListener('resize', resize)
 
-      let origin = null
+      // Táctil: mitad izquierda = joystick de movimiento; mitad derecha = giro de
+      // cámara. Ratón (escritorio): arrastrar = giro de cámara.
       const maxR = 60
+      let moveTid = null, moveOrig = null
+      let camTid = null, camLast = null
+      let mouseDown = false, mouseLast = null
       const ts = (e) => {
         if (paused) return
-        const t = e.changedTouches[0]
-        origin = { x: t.clientX, y: t.clientY }
-        touch.active = true
-        joy = { active: true, ox: t.clientX, oy: t.clientY, kx: t.clientX, ky: t.clientY }
-        showHint = false
+        for (const t of e.changedTouches) {
+          if (t.clientX < innerWidth * 0.5 && moveTid === null) {
+            moveTid = t.identifier
+            moveOrig = { x: t.clientX, y: t.clientY }
+            touch.active = true
+            joy = { active: true, ox: t.clientX, oy: t.clientY, kx: t.clientX, ky: t.clientY }
+            showHint = false
+          } else if (camTid === null) {
+            camTid = t.identifier
+            camLast = { x: t.clientX, y: t.clientY }
+          }
+        }
       }
       const tm = (e) => {
-        if (!origin) return
-        const t = e.changedTouches[0]
-        touch.x = clamp((t.clientX - origin.x) / maxR, -1, 1)
-        touch.y = clamp((t.clientY - origin.y) / maxR, -1, 1)
-        joy = { active: true, ox: origin.x, oy: origin.y, kx: origin.x + touch.x * maxR, ky: origin.y + touch.y * maxR }
+        for (const t of e.changedTouches) {
+          if (t.identifier === moveTid && moveOrig) {
+            touch.x = clamp((t.clientX - moveOrig.x) / maxR, -1, 1)
+            touch.y = clamp((t.clientY - moveOrig.y) / maxR, -1, 1)
+            joy = { active: true, ox: moveOrig.x, oy: moveOrig.y, kx: moveOrig.x + touch.x * maxR, ky: moveOrig.y + touch.y * maxR }
+          } else if (t.identifier === camTid && camLast) {
+            rotateCam(t.clientX - camLast.x, t.clientY - camLast.y)
+            camLast = { x: t.clientX, y: t.clientY }
+          }
+        }
       }
-      const te = () => { origin = null; touch.active = false; touch.x = touch.y = 0; joy = { ...joy, active: false } }
+      const te = (e) => {
+        for (const t of e.changedTouches) {
+          if (t.identifier === moveTid) { moveTid = null; moveOrig = null; touch.active = false; touch.x = touch.y = 0; joy = { ...joy, active: false } }
+          if (t.identifier === camTid) { camTid = null; camLast = null }
+        }
+      }
+      const md = (e) => { if (paused) return; mouseDown = true; mouseLast = { x: e.clientX, y: e.clientY }; canvas.style.cursor = 'grabbing' }
+      const mm = (e) => { if (!mouseDown) return; rotateCam(e.clientX - mouseLast.x, e.clientY - mouseLast.y); mouseLast = { x: e.clientX, y: e.clientY } }
+      const mu = () => { mouseDown = false; canvas.style.cursor = 'grab' }
+      canvas.style.cursor = 'grab'
       canvas.addEventListener('touchstart', ts, { passive: true })
       canvas.addEventListener('touchmove', tm, { passive: true })
       canvas.addEventListener('touchend', te, { passive: true })
+      canvas.addEventListener('mousedown', md)
+      addEventListener('mousemove', mm)
+      addEventListener('mouseup', mu)
 
       // --- loop ----------------------------------------------------------------
       const clock = new THREE.Clock()
@@ -331,11 +371,23 @@
           }
           avatar.userData.torso.position.y = 0.7 + Math.sin(t * 2) * 0.012
 
-          const back = forward.clone().negate()
-          const camTarget = avatar.position.clone().addScaledVector(nUp, 5).addScaledVector(back, 9)
-          camera.position.lerp(camTarget, 1 - Math.pow(0.0009, dt))
+          // Cámara orbital de 3ª persona.
+          if (pendingYaw) { boom.applyAxisAngle(nUp, pendingYaw); pendingYaw = 0 }
+          boom.sub(nUp.clone().multiplyScalar(boom.dot(nUp)))
+          if (boom.lengthSq() < 1e-6) boom.copy(forward).negate()
+          boom.normalize()
+          if (moving && autoFollow <= 0) {
+            boom.lerp(forward.clone().negate(), 1 - Math.pow(0.1, dt))
+            boom.sub(nUp.clone().multiplyScalar(boom.dot(nUp)))
+            if (boom.lengthSq() > 1e-6) boom.normalize()
+          }
+          autoFollow = Math.max(0, autoFollow - dt)
+          const horiz = camDist * Math.cos(camPitch)
+          const vert = camDist * Math.sin(camPitch)
+          const camTarget = avatar.position.clone().addScaledVector(nUp, vert + 0.6).addScaledVector(boom, horiz)
+          camera.position.lerp(camTarget, 1 - Math.pow(0.0012, dt))
           camera.up.copy(nUp)
-          camera.lookAt(avatar.position.clone().addScaledVector(nUp, 1.4))
+          camera.lookAt(avatar.position.clone().addScaledVector(nUp, 1.5))
 
           let best = -1, bestD = NEAR
           for (let i = 0; i < stations.length; i++) {
@@ -390,6 +442,9 @@
         canvas.removeEventListener('touchstart', ts)
         canvas.removeEventListener('touchmove', tm)
         canvas.removeEventListener('touchend', te)
+        canvas.removeEventListener('mousedown', md)
+        removeEventListener('mousemove', mm)
+        removeEventListener('mouseup', mu)
         composer?.dispose?.()
         renderer.dispose()
         scene.traverse((o) => {
