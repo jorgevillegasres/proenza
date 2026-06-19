@@ -1,32 +1,44 @@
-// Perfiles del equipo. Contenido de ejemplo (placeholder) — reemplazar por los
-// abogados reales, sus fotos y trayectoria. El campo `posts` enlaza con el blog.
+// El equipo de Proenza Abogados. Cada uno tiene su oficina en el despacho 3D.
 export const abogados = [
   {
-    slug: 'maria-proenza',
-    name: 'María Proenza',
-    role: 'Socia fundadora · Familia y Sucesiones',
-    photo: '', // ruta a foto real; si vacío se usa un monograma
-    bio: 'Abogada de la Universidad Nacional de Colombia con más de 15 años acompañando a familias en procesos de divorcio, custodia y sucesiones. Cree en una litigación firme pero humana.',
-    areas: ['familia', 'sucesiones'],
-    email: 'mproenza@proenzabogados.co',
+    slug: 'harold-tabares',
+    name: 'Dr. Harold Tabares',
+    role: 'Abogado Civilista',
+    specialty: 'Derecho Civil',
+    photo: '',
+    bio: 'Especialista en derecho civil: contratos, obligaciones, bienes y responsabilidad civil. Acompaña a sus clientes con rigor y cercanía.',
+    areas: ['contratos', 'obligaciones', 'bienes'],
+    email: 'htabares@proenzalegal.com',
   },
   {
-    slug: 'carlos-restrepo',
-    name: 'Carlos Restrepo',
-    role: 'Socio · Contratos y Responsabilidad Civil',
+    slug: 'edna-ramirez',
+    name: 'Dra. Edna Ramírez',
+    role: 'Abogada Civilista',
+    specialty: 'Derecho Civil',
     photo: '',
-    bio: 'Especialista en derecho contractual y responsabilidad civil. Estructura negocios y defiende a sus clientes cuando un acuerdo se incumple o un daño debe repararse.',
-    areas: ['contratos', 'responsabilidad-civil', 'obligaciones'],
-    email: 'crestrepo@proenzabogados.co',
+    bio: 'Abogada civilista enfocada en familia, sucesiones y litigio civil. Defiende lo que más importa a las familias con firmeza y empatía.',
+    areas: ['familia', 'sucesiones', 'responsabilidad-civil'],
+    email: 'eramirez@proenzalegal.com',
   },
   {
-    slug: 'laura-gomez',
-    name: 'Laura Gómez',
-    role: 'Asociada · Bienes y Derecho de Personas',
+    slug: 'ivan-salazar',
+    name: 'Dr. Iván Salazar',
+    role: 'Abogado Tributarista',
+    specialty: 'Derecho Tributario',
     photo: '',
-    bio: 'Enfocada en derecho inmobiliario y procesos de pertenencia. Acompaña a propietarios a sanear y proteger su patrimonio con rigor y cercanía.',
-    areas: ['bienes', 'personas'],
-    email: 'lgomez@proenzabogados.co',
+    bio: 'Especialista en derecho tributario: planeación fiscal, cumplimiento y defensa ante la administración tributaria.',
+    areas: ['contratos', 'obligaciones'],
+    email: 'isalazar@proenzalegal.com',
+  },
+  {
+    slug: 'jorge-villegas',
+    name: 'Dr. Jorge Alberto Villegas',
+    role: 'Abogado Informático',
+    specialty: 'Derecho Informático',
+    photo: '',
+    bio: 'Abogado informático: protección de datos, contratos tecnológicos, ciberseguridad y derecho digital. Une el derecho con la tecnología.',
+    areas: ['contratos', 'personas'],
+    email: 'jvillegas@proenzalegal.com',
   },
 ]
 
@@ -37,6 +49,7 @@ export function getAbogado(slug) {
 // Iniciales para el monograma cuando no hay foto.
 export function initials(name) {
   return name
+    .replace(/^(Dr|Dra)\.?\s*/i, '')
     .split(' ')
     .slice(0, 2)
     .map((w) => w[0])

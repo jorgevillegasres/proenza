@@ -1,46 +1,79 @@
 <script>
   import { onMount } from 'svelte'
-  import { site } from '$lib/data/site.js'
+  import { site, whatsappLink } from '$lib/data/site.js'
+  import { abogados, initials } from '$lib/data/abogados.js'
+  import { posts, formatDate } from '$lib/data/posts.js'
 
-  // URLs de imágenes (fotorrealistas) inyectadas por la ruta.
   let { cityUrl = '', envUrl = '' } = $props()
 
   let canvas = $state(null)
   let ready = $state(false)
   let failed = $state(false)
 
+  // HUD reactivo
+  let active = $state(null) // estación cercana {id,label,type,...}
+  let open = $state(null) // estación abierta (panel)
+  let discovered = $state([]) // ids visitados
+  let toast = $state('')
+  let stationsUI = $state([])
+
+  // Estaciones del despacho (la geometría se construye en onMount).
+  const STATIONS = [
+    ...abogados.map((a, i) => ({
+      id: a.slug,
+      type: 'office',
+      label: `${a.name}`,
+      sub: a.role,
+      lawyer: a,
+      z: 6.5 - i * 3.5, // 6.5, 3, -0.5, -4
+    })),
+    { id: 'recepcion', type: 'reception', label: 'Recepción', sub: 'Deja tu caso para análisis', z: -8, center: true },
+    { id: 'biblioteca', type: 'library', label: 'Biblioteca', sub: 'Artículos y blog', z: 8.5, right: true },
+  ]
+  stationsUI = STATIONS.map((s) => ({ id: s.id, label: s.label, type: s.type }))
+
+  function openStation(s) {
+    open = s
+    if (s && !discovered.includes(s.id)) discovered = [...discovered, s.id]
+  }
+  function closeStation() { open = null }
+  function showToast(msg) { toast = msg; setTimeout(() => (toast = msg === toast ? '' : toast), 3500) }
+
+  // formularios
+  let f = $state({ nombre: '', contacto: '', fecha: '', mensaje: '' })
+  function citaWhats(e, lawyer) {
+    e?.preventDefault()
+    const msg = `Hola, quiero agendar una cita con ${lawyer.name} (${lawyer.role}).\n• Nombre: ${f.nombre || '—'}\n• Contacto: ${f.contacto || '—'}\n• Fecha: ${f.fecha || '—'}\n` + (f.mensaje ? `• Detalle: ${f.mensaje}\n` : '')
+    globalThis.open(whatsappLink(msg), '_blank', 'noopener')
+  }
+  function casoWhats(e) {
+    e?.preventDefault()
+    const msg = `Hola, quiero dejar mi caso para análisis.\n• Nombre: ${f.nombre || '—'}\n• Contacto: ${f.contacto || '—'}\n• Caso: ${f.mensaje || '—'}\n`
+    globalThis.open(whatsappLink(msg), '_blank', 'noopener')
+  }
+  let selPost = $state(null)
+
   onMount(() => {
     let cleanup = () => {}
     let cancelled = false
     ;(async () => {
       let THREE
-      try {
-        THREE = await import('three')
-      } catch {
-        failed = true
-        return
-      }
+      try { THREE = await import('three') } catch { failed = true; return }
       if (cancelled) return
 
       let renderer
-      try {
-        renderer = new THREE.WebGLRenderer({ canvas, antialias: true })
-        if (!renderer.getContext()) throw 0
-      } catch {
-        failed = true
-        return
-      }
+      try { renderer = new THREE.WebGLRenderer({ canvas, antialias: true }); if (!renderer.getContext()) throw 0 } catch { failed = true; return }
       renderer.setPixelRatio(Math.min(devicePixelRatio, 2))
       renderer.shadowMap.enabled = true
       renderer.shadowMap.type = THREE.PCFSoftShadowMap
       renderer.toneMapping = THREE.ACESFilmicToneMapping
-      renderer.toneMappingExposure = 0.86
+      renderer.toneMappingExposure = 0.9
 
       const scene = new THREE.Scene()
-      scene.background = new THREE.Color(0xc7d2dd)
-      const camera = new THREE.PerspectiveCamera(72, innerWidth / innerHeight, 0.05, 200)
+      scene.background = new THREE.Color(0xcdd6df)
+      const camera = new THREE.PerspectiveCamera(70, innerWidth / innerHeight, 0.05, 300)
 
-      // --- iluminación de entorno (IBL) desde el panorama interior ------------
+      // IBL desde el panorama de oficina
       if (envUrl) {
         const pmrem = new THREE.PMREMGenerator(renderer)
         pmrem.compileEquirectangularShader()
@@ -49,154 +82,162 @@
           tex.colorSpace = THREE.SRGBColorSpace
           scene.environment = pmrem.fromEquirectangular(tex).texture
           if ('environmentIntensity' in scene) scene.environmentIntensity = 0.8
-          tex.dispose()
-          pmrem.dispose()
+          tex.dispose(); pmrem.dispose()
         })
       }
 
-      // --- materiales ----------------------------------------------------------
-      const mat = (color, opts = {}) => new THREE.MeshStandardMaterial({ color, ...opts })
-      const floorMat = mat(0xb4b9bf, { roughness: 0.22, metalness: 0.0 }) // mármol pulido (refleja el env)
-      const wallMat = mat(0xf2f2f0, { roughness: 0.9 })
-      const ceilMat = mat(0xeeeeee, { roughness: 1 })
-      const woodMat = mat(0x4a2f1d, { roughness: 0.45, metalness: 0.1 })
-      const deskTop = mat(0x2a1c12, { roughness: 0.3 })
-      const glassMat = new THREE.MeshStandardMaterial({ color: 0xbcd3e6, roughness: 0.05, metalness: 0.0, transparent: true, opacity: 0.22 })
-      const mullion = mat(0x20242a, { roughness: 0.6, metalness: 0.4 })
-      const lightMat = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xfff0d8, emissiveIntensity: 3 })
-
-      // --- dimensiones de la sala ---------------------------------------------
-      const W = 16, D = 11, H = 3.3
-      const x0 = -W / 2, x1 = W / 2, z0 = -D / 2, z1 = D / 2
-
-      const add = (mesh, cast = true, receive = true) => {
-        mesh.castShadow = cast
-        mesh.receiveShadow = receive
-        scene.add(mesh)
-        return mesh
-      }
-      const plane = (w, h, m, x, y, z, rx = 0, ry = 0) => {
-        const p = new THREE.Mesh(new THREE.PlaneGeometry(w, h), m)
-        p.position.set(x, y, z)
-        p.rotation.set(rx, ry, 0)
-        return add(p, false, true)
+      const mat = (c, o = {}) => new THREE.MeshStandardMaterial({ color: c, ...o })
+      const M = {
+        floor: mat(0xb4b9bf, { roughness: 0.22 }),
+        wall: mat(0xf2f2f0, { roughness: 0.9 }),
+        ceil: mat(0xededed, { roughness: 1 }),
+        wood: mat(0x4a2f1d, { roughness: 0.45, metalness: 0.1 }),
+        deskTop: mat(0x2a1c12, { roughness: 0.3 }),
+        glass: new THREE.MeshStandardMaterial({ color: 0xcfe0ec, roughness: 0.05, transparent: true, opacity: 0.16 }),
+        frame: mat(0x20242a, { roughness: 0.6, metalness: 0.4 }),
+        dark: mat(0x14171b, { roughness: 0.5 }),
+        line: new THREE.MeshStandardMaterial({ color: 0xeaf6ff, emissive: 0x9fd4ff, emissiveIntensity: 2.2 }),
+        lamp: new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xfff0d8, emissiveIntensity: 3 }),
       }
 
-      // piso y techo
-      plane(W, D, floorMat, 0, 0, 0, -Math.PI / 2)
-      plane(W, D, ceilMat, 0, H, 0, Math.PI / 2)
-      // paredes (fondo, frente, izquierda = madera). derecha = ventanal.
-      plane(W, H, woodMat, 0, H / 2, z0, 0, 0) // fondo (madera, con el letrero)
-      plane(W, H, wallMat, 0, H / 2, z1, 0, Math.PI) // frente (entrada)
-      plane(D, H, wallMat, x0, H / 2, 0, 0, Math.PI / 2) // izquierda
+      const HALL_Z0 = -9.2, HALL_Z1 = 11, H = 3.3, X_L = -2.2, X_R = 2.2, X_LBACK = -7.5
+      const grp = new THREE.Group(); scene.add(grp)
+      const addM = (m, cast = true, rec = true) => { m.castShadow = cast; m.receiveShadow = rec; grp.add(m); return m }
+      const box = (w, h, d, material, x, y, z, ry = 0) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), material); m.position.set(x, y, z); m.rotation.y = ry; return addM(m) }
+      const planeM = (w, h, material, x, y, z, rx = 0, ry = 0) => { const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), material); m.position.set(x, y, z); m.rotation.set(rx, ry, 0); return addM(m, false, true) }
 
-      // --- ventanal a la ciudad (pared derecha) -------------------------------
-      const cityMat = new THREE.MeshBasicMaterial({ color: 0xffffff })
-      if (cityUrl) {
-        const ctex = new THREE.TextureLoader().load(cityUrl, () => {})
-        ctex.colorSpace = THREE.SRGBColorSpace
-        cityMat.map = ctex
-        cityMat.needsUpdate = true
-      } else {
-        cityMat.color.set(0xbcd3e6)
-      }
-      // plano de ciudad por fuera del ventanal
-      plane(D * 2.2, H * 1.6, cityMat, x1 + 2.2, H / 2 + 0.2, 0, 0, -Math.PI / 2)
-      // cristal + montantes verticales
-      plane(D, H, glassMat, x1 - 0.02, H / 2, 0, 0, -Math.PI / 2)
-      for (let i = 0; i <= 5; i++) {
-        const z = z0 + (D * i) / 5
-        const bar = new THREE.Mesh(new THREE.BoxGeometry(0.07, H, 0.07), mullion)
-        bar.position.set(x1 - 0.03, H / 2, z)
-        scene.add(bar)
-      }
-      plane(0.12, D, mullion, x1 - 0.03, 0.06, 0, -Math.PI / 2) // base
-      plane(0.12, D, mullion, x1 - 0.03, H - 0.06, 0, -Math.PI / 2) // dintel
+      const totalZ = HALL_Z1 - HALL_Z0
+      const midZ = (HALL_Z0 + HALL_Z1) / 2
+      // piso + techo
+      planeM(X_R - X_LBACK + 4, totalZ, M.floor, (X_R + X_LBACK) / 2, 0, midZ, -Math.PI / 2)
+      planeM(X_R - X_LBACK + 4, totalZ, M.ceil, (X_R + X_LBACK) / 2, H, midZ, Math.PI / 2)
+      // pared de entrada (frente) y back-left
+      planeM(X_R - X_LBACK, H, M.wall, (X_R + X_LBACK) / 2, H / 2, HALL_Z1, 0, Math.PI)
+      planeM(X_R - X_LBACK, H, M.wall, (X_R + X_LBACK) / 2, H / 2, HALL_Z0 + 0.01, 0, 0)
+      planeM(totalZ, H, M.wall, X_LBACK, H / 2, midZ, 0, Math.PI / 2) // pared izquierda exterior
 
-      // --- luces de techo lineales (emisivas + reales) ------------------------
-      for (const zc of [-2.6, 0, 2.6]) {
-        const strip = new THREE.Mesh(new THREE.BoxGeometry(W * 0.7, 0.05, 0.22), lightMat)
-        strip.position.set(0, H - 0.03, zc)
-        scene.add(strip)
-        const pl = new THREE.PointLight(0xfff2de, 7, 14, 2)
-        pl.position.set(0, H - 0.35, zc)
-        scene.add(pl)
-      }
-      // luz de día desde el ventanal
-      const day = new THREE.DirectionalLight(0xfff6e8, 1.4)
-      day.position.set(18, 9, 4)
-      day.castShadow = true
-      day.shadow.mapSize.set(2048, 2048)
-      day.shadow.camera.near = 1
-      day.shadow.camera.far = 60
-      Object.assign(day.shadow.camera, { left: -14, right: 14, top: 10, bottom: -10 })
-      day.shadow.bias = -0.0005
-      scene.add(day, day.target)
-      scene.add(new THREE.AmbientLight(0xffffff, 0.05))
+      // --- ventanal derecho con la ciudad ------------------------------------
+      const cityMat = new THREE.MeshBasicMaterial({ color: 0xbcd3e6 })
+      if (cityUrl) { const t = new THREE.TextureLoader().load(cityUrl); t.colorSpace = THREE.SRGBColorSpace; t.wrapS = THREE.RepeatWrapping; t.repeat.x = 2.5; cityMat.map = t }
+      planeM(totalZ * 2.4, H * 1.7, cityMat, X_R + 3, H / 2 + 0.2, midZ, 0, -Math.PI / 2)
+      planeM(totalZ, H, M.glass, X_R - 0.02, H / 2, midZ, 0, -Math.PI / 2)
+      for (let z = HALL_Z0; z <= HALL_Z1; z += 2.2) box(0.07, H, 0.07, M.frame, X_R - 0.03, H / 2, z)
+      planeM(totalZ, 0.14, M.frame, X_R - 0.03, 0.07, midZ, -Math.PI / 2)
+      planeM(totalZ, 0.14, M.frame, X_R - 0.03, H - 0.07, midZ, -Math.PI / 2)
 
-      // --- letrero PROENZA retroiluminado en la pared de madera ---------------
+      // --- luces de techo ----------------------------------------------------
+      for (let z = HALL_Z0 + 2; z < HALL_Z1; z += 3.2) {
+        box(0.25, 0.05, 1.6, M.lamp, 0, H - 0.04, z)
+        const pl = new THREE.PointLight(0xfff2de, 6, 12, 2); pl.position.set(0, H - 0.4, z); grp.add(pl)
+      }
+      const day = new THREE.DirectionalLight(0xfff6e8, 1.5); day.position.set(20, 12, 6); day.castShadow = true
+      day.shadow.mapSize.set(2048, 2048); day.shadow.camera.near = 1; day.shadow.camera.far = 80
+      Object.assign(day.shadow.camera, { left: -16, right: 16, top: 14, bottom: -14 }); day.shadow.bias = -0.0005
+      grp.add(day, day.target)
+      grp.add(new THREE.AmbientLight(0xffffff, 0.06))
+
+      // --- letrero de canvas reutilizable ------------------------------------
+      const textSign = (line1, line2, w, h, em = 0xffe9c0) => {
+        const c = document.createElement('canvas'); c.width = 1024; c.height = 256
+        const g = c.getContext('2d'); g.clearRect(0, 0, c.width, c.height)
+        g.fillStyle = '#fff7e6'; g.textAlign = 'center'; g.textBaseline = 'middle'
+        g.font = '700 96px Georgia, serif'; g.fillText(line1, c.width / 2, line2 ? 95 : 128)
+        if (line2) { g.font = '500 54px Georgia, serif'; g.fillText(line2, c.width / 2, 185) }
+        const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace
+        const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshStandardMaterial({ map: tex, emissive: em, emissiveMap: tex, emissiveIntensity: 1.5, transparent: true }))
+        return m
+      }
+
+      // --- recepción (fondo) -------------------------------------------------
+      planeM(X_R - X_LBACK, H, M.wood, (X_R + X_LBACK) / 2 + 1.5, H / 2, HALL_Z0 + 0.02, 0, 0) // muro de madera
+      { const sign = textSign('PROENZA', 'ABOGADOS', 3.4, 0.9); sign.position.set(-1.2, 2.0, HALL_Z0 + 0.06); grp.add(sign) }
+      { // mostrador de mármol
+        const counter = new THREE.Mesh(new THREE.BoxGeometry(3.4, 1.05, 0.9), mat(0xd9dde2, { roughness: 0.2 }))
+        counter.position.set(-1.2, 0.525, HALL_Z0 + 1.5); counter.castShadow = counter.receiveShadow = true; grp.add(counter)
+        box(3.6, 0.08, 1.05, M.deskTop, -1.2, 1.08, HALL_Z0 + 1.5)
+      }
+
+      // --- oficinas (lado izquierdo) -----------------------------------------
+      const proxPoints = []
+      for (const s of STATIONS.filter((x) => x.type === 'office')) {
+        const zc = s.z, hd = 1.55
+        // particiones laterales + fondo + frente de vidrio
+        box(X_L - X_LBACK, H, 0.08, M.wall, (X_L + X_LBACK) / 2, H / 2, zc - hd)
+        box(X_L - X_LBACK, H, 0.08, M.wall, (X_L + X_LBACK) / 2, H / 2, zc + hd)
+        planeM(2 * hd, H, M.glass, X_L, H / 2, zc, 0, Math.PI / 2) // vidrio al pasillo
+        box(0.06, H, 0.06, M.frame, X_L, H / 2, zc - hd)
+        box(0.06, H, 0.06, M.frame, X_L, H / 2, zc + hd)
+        // escritorio + silla dentro
+        const desk = box(1.6, 0.9, 0.75, M.wood, X_L - 2.2, 0.45, zc, Math.PI / 2)
+        box(1.75, 0.06, 0.9, M.deskTop, X_L - 2.2, 0.92, zc, Math.PI / 2)
+        const ch = new THREE.Group(); ch.add(new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.1, 0.5), M.dark).translateY(0.46)); ch.add(new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.55, 0.08), M.dark).translateY(0.75).translateZ(-0.22)); ch.position.set(X_L - 3.0, 0, zc); ch.rotation.y = Math.PI / 2; grp.add(ch)
+        // letrero colgante con el nombre
+        const sign = textSign(s.label.toUpperCase(), s.sub, 2.4, 0.62, 0x8fd0ff)
+        sign.position.set(X_L + 0.04, 2.25, zc); sign.rotation.y = Math.PI / 2; grp.add(sign)
+        const bar = box(0.02, 0.5, 0.02, M.frame, X_L + 0.04, 2.7, zc); void bar
+        proxPoints.push({ s, x: X_L + 0.9, z: zc })
+      }
+
+      // --- biblioteca (lado derecho, cerca de la entrada) --------------------
       {
-        const c = document.createElement('canvas')
-        c.width = 1024; c.height = 320
-        const g = c.getContext('2d')
-        g.clearRect(0, 0, c.width, c.height)
-        g.fillStyle = '#fff7e6'
-        g.textAlign = 'center'; g.textBaseline = 'middle'
-        g.font = '700 150px Georgia, serif'
-        g.fillText('PROENZA', c.width / 2, 130)
-        g.font = '600 70px Georgia, serif'
-        g.fillText('A B O G A D O S', c.width / 2, 240)
-        const tex = new THREE.CanvasTexture(c)
-        tex.colorSpace = THREE.SRGBColorSpace
-        const signMat = new THREE.MeshStandardMaterial({ map: tex, emissive: 0xffe9c0, emissiveMap: tex, emissiveIntensity: 1.4, transparent: true })
-        const sign = new THREE.Mesh(new THREE.PlaneGeometry(3.6, 1.12), signMat)
-        sign.position.set(-2.4, 1.95, z0 + 0.06)
-        sign.rotation.y = 0
-        scene.add(sign)
+        const zc = 8.5
+        box(0.5, 2.6, 3.0, M.wood, X_R - 0.4, 1.3, zc) // mueble de fondo
+        for (let i = 0; i < 4; i++) box(0.42, 0.08, 2.8, M.deskTop, X_R - 0.4, 0.6 + i * 0.6, zc)
+        for (let i = 0; i < 4; i++) for (let j = 0; j < 9; j++) { const cc = [0x6b4a2b, 0x355c7d, 0x99403a, 0x3f6f4f, 0x7a5aa0][(i + j) % 5]; box(0.16, 0.42, 0.14, mat(cc), X_R - 0.62, 0.85 + i * 0.6, zc - 1.3 + j * 0.32) }
+        const sign = textSign('BIBLIOTECA', 'Blog jurídico', 2.0, 0.55, 0x8fd0ff)
+        sign.position.set(X_R - 0.05, 2.25, zc); sign.rotation.y = -Math.PI / 2; grp.add(sign)
+        proxPoints.push({ s: STATIONS.find((x) => x.id === 'biblioteca'), x: X_R - 1.1, z: zc })
       }
+      // recepción punto de proximidad
+      proxPoints.push({ s: STATIONS.find((x) => x.id === 'recepcion'), x: -1.2, z: HALL_Z0 + 3.0 })
 
-      // --- escritorio de recepción --------------------------------------------
-      {
-        const desk = new THREE.Group()
-        const body = new THREE.Mesh(new THREE.BoxGeometry(3.2, 1.05, 0.9), woodMat)
-        body.position.y = 0.525
-        const top = new THREE.Mesh(new THREE.BoxGeometry(3.5, 0.08, 1.1), deskTop)
-        top.position.y = 1.08
-        body.castShadow = top.castShadow = true
-        body.receiveShadow = top.receiveShadow = true
-        desk.add(body, top)
-        desk.position.set(-2.4, 0, z0 + 1.4)
-        desk.rotation.y = 0
-        scene.add(desk)
-        // silla
-        const chair = new THREE.Group()
-        const seat = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.1, 0.55), mat(0x111316, { roughness: 0.5 }))
-        seat.position.y = 0.5
-        const back = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.6, 0.08), mat(0x111316, { roughness: 0.5 }))
-        back.position.set(0, 0.8, -0.24)
-        seat.castShadow = back.castShadow = true
-        chair.add(seat, back)
-        chair.add(new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.5, 8), mullion).translateY(0.25))
-        chair.position.set(-2.4, 0, z0 + 0.7)
-        scene.add(chair)
+      // --- líneas guía luminosas en el piso ----------------------------------
+      box(0.12, 0.02, totalZ - 1, M.line, 0, 0.02, midZ) // línea central
+      for (const p of proxPoints) box(Math.abs(p.x) + 1.6, 0.02, 0.12, M.line, p.x / 2, 0.02, p.z) // ramales
+
+      // --- easter eggs -------------------------------------------------------
+      // 1) Taza de café del Dr. Villegas (el informático) — el dev.
+      const egg1 = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.06, 0.1, 12), mat(0x222222))
+      egg1.position.set(X_L - 1.8, 0.98, -4 + 0.4); egg1.userData.egg = 'Café del Dr. Villegas: "// TODO: ganar el caso". ☕💻'; grp.add(egg1)
+      // 2) Gato escondido tras la recepción
+      const egg2 = new THREE.Group()
+      egg2.add(new THREE.Mesh(new THREE.SphereGeometry(0.12, 10, 10), mat(0x33312f)))
+      egg2.add(new THREE.Mesh(new THREE.ConeGeometry(0.04, 0.08, 4), mat(0x33312f)).translateY(0.12).translateX(-0.05))
+      egg2.add(new THREE.Mesh(new THREE.ConeGeometry(0.04, 0.08, 4), mat(0x33312f)).translateY(0.12).translateX(0.05))
+      egg2.position.set(-2.6, 0.12, HALL_Z0 + 1.0); egg2.userData.egg = '🐱 Encontraste a "Habeas", el gato del despacho.'; grp.add(egg2)
+      const eggs = [egg1, egg2]
+
+      // --- primera persona ---------------------------------------------------
+      const eye = 1.62
+      const cpos = new THREE.Vector3(0, eye, HALL_Z1 - 1.5)
+      let yaw = 0, pitch = -0.03
+      const keys = new Set()
+      const onKD = (e) => { const k = e.key.toLowerCase(); if (['w', 'a', 's', 'd', ' '].includes(k)) e.preventDefault(); if (k === 'escape') { closeStation(); return } if (open) return; if (k === 'e' && active) { openStation(STATIONS.find((x) => x.id === active.id)); return } keys.add(k) }
+      const onKU = (e) => keys.delete(e.key.toLowerCase())
+      addEventListener('keydown', onKD); addEventListener('keyup', onKU)
+      let dragging = false, lx = 0, ly = 0
+      const down = (x, y) => { if (open) return; dragging = true; lx = x; ly = y }
+      const lookm = (x, y) => { if (!dragging) return; yaw -= (x - lx) * 0.0026; pitch = Math.max(-1.0, Math.min(0.85, pitch - (y - ly) * 0.0026)); lx = x; ly = y }
+      const upp = () => { dragging = false }
+      const md = (e) => down(e.clientX, e.clientY), mm = (e) => lookm(e.clientX, e.clientY)
+      const ts = (e) => { const t = e.touches[0]; down(t.clientX, t.clientY) }, tm = (e) => { const t = e.touches[0]; lookm(t.clientX, t.clientY) }
+      canvas.addEventListener('mousedown', md); addEventListener('mousemove', mm); addEventListener('mouseup', upp)
+      canvas.addEventListener('touchstart', ts, { passive: true }); canvas.addEventListener('touchmove', tm, { passive: true }); canvas.addEventListener('touchend', upp)
+      // click → interactuar con estación o easter egg
+      const ray = new THREE.Raycaster()
+      const onClick = (e) => {
+        if (open) return
+        if (active) { openStation(STATIONS.find((x) => x.id === active.id)); return }
+        const ndc = new THREE.Vector2((e.clientX / innerWidth) * 2 - 1, -(e.clientY / innerHeight) * 2 + 1)
+        ray.setFromCamera(ndc, camera)
+        const hit = ray.intersectObjects(eggs, true)[0]
+        if (hit) { let o = hit.object; while (o && !o.userData.egg) o = o.parent; if (o) showToast(o.userData.egg) }
       }
+      canvas.addEventListener('click', onClick)
 
-      // --- sofás de espera (junto al ventanal) --------------------------------
-      const sofaMat = mat(0x2b2f36, { roughness: 0.7 })
-      for (const zc of [-1.0, 1.2]) {
-        const s = new THREE.Group()
-        const base = new THREE.Mesh(new THREE.BoxGeometry(1.9, 0.45, 0.85), sofaMat)
-        base.position.y = 0.32
-        const bk = new THREE.Mesh(new THREE.BoxGeometry(1.9, 0.5, 0.2), sofaMat)
-        bk.position.set(0, 0.6, -0.32)
-        base.castShadow = bk.castShadow = base.receiveShadow = true
-        s.add(base, bk)
-        s.position.set(x1 - 1.4, 0, zc)
-        s.rotation.y = -Math.PI / 2
-        scene.add(s)
-      }
+      const resize = () => { renderer.setSize(innerWidth, innerHeight); camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); composer?.setSize(innerWidth, innerHeight) }
 
-      // --- post (bloom suave para luces/letrero) ------------------------------
+      // post (bloom suave)
       let composer = null
       try {
         const [{ EffectComposer }, { RenderPass }, { UnrealBloomPass }, { OutputPass }] = await Promise.all([
@@ -205,103 +246,44 @@
           import('three/examples/jsm/postprocessing/UnrealBloomPass.js'),
           import('three/examples/jsm/postprocessing/OutputPass.js'),
         ])
-        composer = new EffectComposer(renderer)
-        composer.addPass(new RenderPass(scene, camera))
-        composer.addPass(new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.35, 0.6, 0.9))
-        composer.addPass(new OutputPass())
-      } catch {
-        composer = null
-      }
+        composer = new EffectComposer(renderer); composer.addPass(new RenderPass(scene, camera))
+        composer.addPass(new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.32, 0.6, 0.85)); composer.addPass(new OutputPass())
+      } catch { composer = null }
+      addEventListener('resize', resize); resize()
 
-      // --- cámara en primera persona ------------------------------------------
-      const eye = 1.62
-      const cpos = new THREE.Vector3(-1.2, eye, 4.5)
-      let yaw = 0
-      let pitch = -0.02
-      const keys = new Set()
-      const onKD = (e) => { keys.add(e.key.toLowerCase()); if (['w', 'a', 's', 'd'].includes(e.key.toLowerCase())) e.preventDefault() }
-      const onKU = (e) => keys.delete(e.key.toLowerCase())
-      addEventListener('keydown', onKD)
-      addEventListener('keyup', onKU)
-
-      let dragging = false, lx = 0, ly = 0
-      const sens = 0.0026
-      const down = (x, y) => { dragging = true; lx = x; ly = y }
-      const moveLook = (x, y) => {
-        if (!dragging) return
-        yaw -= (x - lx) * sens
-        pitch = Math.max(-1.1, Math.min(0.9, pitch - (y - ly) * sens))
-        lx = x; ly = y
-      }
-      const up = () => { dragging = false }
-      const md = (e) => down(e.clientX, e.clientY)
-      const mm = (e) => moveLook(e.clientX, e.clientY)
-      const ts = (e) => { const t = e.touches[0]; down(t.clientX, t.clientY) }
-      const tm = (e) => { const t = e.touches[0]; moveLook(t.clientX, t.clientY) }
-      canvas.addEventListener('mousedown', md)
-      addEventListener('mousemove', mm)
-      addEventListener('mouseup', up)
-      canvas.addEventListener('touchstart', ts, { passive: true })
-      canvas.addEventListener('touchmove', tm, { passive: true })
-      canvas.addEventListener('touchend', up)
-
-      const resize = () => {
-        renderer.setSize(innerWidth, innerHeight)
-        camera.aspect = innerWidth / innerHeight
-        camera.updateProjectionMatrix()
-        composer?.setSize(innerWidth, innerHeight)
-      }
-      addEventListener('resize', resize)
-      resize()
-
-      const clock = new THREE.Clock()
-      let raf = 0
-      const fwd = new THREE.Vector3(), right = new THREE.Vector3(), tmpv = new THREE.Vector3()
-      const SPEED = 3.2
+      const clock = new THREE.Clock(); let raf = 0
+      const fwd = new THREE.Vector3(), rgt = new THREE.Vector3(), tv = new THREE.Vector3()
       function frame() {
         raf = requestAnimationFrame(frame)
         const dt = Math.min(clock.getDelta(), 0.05)
-
-        camera.rotation.order = 'YXZ'
-        camera.rotation.y = yaw
-        camera.rotation.x = pitch
-
-        fwd.set(-Math.sin(yaw), 0, -Math.cos(yaw))
-        right.set(Math.cos(yaw), 0, -Math.sin(yaw))
-        let mx = 0, mz = 0
-        if (keys.has('w') || keys.has('arrowup')) mz += 1
-        if (keys.has('s') || keys.has('arrowdown')) mz -= 1
-        if (keys.has('d') || keys.has('arrowright')) mx += 1
-        if (keys.has('a') || keys.has('arrowleft')) mx -= 1
-        tmpv.set(0, 0, 0).addScaledVector(fwd, mz).addScaledVector(right, mx)
-        if (tmpv.lengthSq() > 0) {
-          tmpv.normalize()
-          cpos.addScaledVector(tmpv, SPEED * dt)
-          cpos.x = Math.max(x0 + 0.6, Math.min(x1 - 0.6, cpos.x))
-          cpos.z = Math.max(z0 + 0.6, Math.min(z1 - 0.6, cpos.z))
+        if (!open) {
+          camera.rotation.order = 'YXZ'; camera.rotation.y = yaw; camera.rotation.x = pitch
+          fwd.set(-Math.sin(yaw), 0, -Math.cos(yaw)); rgt.set(Math.cos(yaw), 0, -Math.sin(yaw))
+          let mx = 0, mz = 0
+          if (keys.has('w') || keys.has('arrowup')) mz += 1
+          if (keys.has('s') || keys.has('arrowdown')) mz -= 1
+          if (keys.has('d') || keys.has('arrowright')) mx += 1
+          if (keys.has('a') || keys.has('arrowleft')) mx -= 1
+          tv.set(0, 0, 0).addScaledVector(fwd, mz).addScaledVector(rgt, mx)
+          if (tv.lengthSq() > 0) { tv.normalize(); cpos.addScaledVector(tv, 3.4 * dt); cpos.x = Math.max(X_L + 0.5, Math.min(X_R - 0.5, cpos.x)); cpos.z = Math.max(HALL_Z0 + 1.2, Math.min(HALL_Z1 - 0.6, cpos.z)) }
+          cpos.y = eye; camera.position.copy(cpos)
+          // proximidad
+          let best = null, bd = 2.6
+          for (const p of proxPoints) { const d = Math.hypot(cpos.x - p.x, cpos.z - p.z); if (d < bd) { bd = d; best = p.s } }
+          const cur = best ? { id: best.id, label: best.label, sub: best.sub, type: best.type } : null
+          if ((cur?.id || null) !== (active?.id || null)) active = cur
         }
-        cpos.y = eye
-        camera.position.copy(cpos)
-
-        if (composer) composer.render()
-        else renderer.render(scene, camera)
+        if (composer) composer.render(); else renderer.render(scene, camera)
         if (!ready) ready = true
       }
       frame()
 
       cleanup = () => {
         cancelAnimationFrame(raf)
-        removeEventListener('keydown', onKD)
-        removeEventListener('keyup', onKU)
-        removeEventListener('mousemove', mm)
-        removeEventListener('mouseup', up)
-        removeEventListener('resize', resize)
-        canvas.removeEventListener('mousedown', md)
-        canvas.removeEventListener('touchstart', ts)
-        canvas.removeEventListener('touchmove', tm)
-        canvas.removeEventListener('touchend', up)
-        composer?.dispose?.()
-        renderer.dispose()
+        removeEventListener('keydown', onKD); removeEventListener('keyup', onKU)
+        removeEventListener('mousemove', mm); removeEventListener('mouseup', upp); removeEventListener('resize', resize)
+        canvas.removeEventListener('mousedown', md); canvas.removeEventListener('touchstart', ts); canvas.removeEventListener('touchmove', tm); canvas.removeEventListener('touchend', upp); canvas.removeEventListener('click', onClick)
+        composer?.dispose?.(); renderer.dispose()
       }
     })()
     return () => { cancelled = true; cleanup() }
@@ -309,52 +291,125 @@
 </script>
 
 <div class="demo">
-  {#if !failed}
-    <canvas bind:this={canvas}></canvas>
-  {/if}
+  {#if !failed}<canvas bind:this={canvas}></canvas>{/if}
 
-  <!-- barra de navegación -->
   <header class="nav">
     <nav>INICIO · SERVICIOS · NUESTRO EQUIPO · CLIENTES · CONTACTO</nav>
-    <div class="contact">
-      <span>{site.phone}</span><span>{site.email}</span>
-    </div>
+    <div class="contact"><span>{site.phone}</span><span>{site.email}</span></div>
   </header>
 
-  <!-- panel de información flotante -->
-  <aside class="info">
-    <h2>ESPECIALISTAS EN DERECHO CIVIL COLOMBIANO</h2>
+  <!-- panel EXPLORE NUESTRO ESPACIO -->
+  <aside class="explore">
+    <h2>EXPLORE NUESTRO ESPACIO</h2>
+    <p class="poi">Puntos de interés:</p>
     <ul>
-      <li>Asesoría en Contratos</li>
-      <li>Responsabilidad Civil</li>
-      <li>Propiedad y Bienes</li>
-      <li>Derecho de Familia</li>
-      <li>Sucesiones</li>
-      <li>Litigio Civil</li>
+      {#each stationsUI as s}
+        <li class:done={discovered.includes(s.id)}>{discovered.includes(s.id) ? '✓' : '○'} {s.label}</li>
+      {/each}
     </ul>
-    <button>MÁS INFORMACIÓN</button>
+    <p class="next">Descubiertos: <b>{discovered.length}/{stationsUI.length}</b></p>
+    {#if active}
+      <button class="cta" onclick={() => openStation(STATIONS.find((x) => x.id === active.id))}>ENTRAR · {active.label}</button>
+    {:else}
+      <span class="cta ghost">Acércate a una zona…</span>
+    {/if}
   </aside>
 
-  <div class="hint">EXPLORA EL DESPACHO USANDO <b>W, A, S, D</b> O ARRASTRA</div>
-  <div class="badge">DEMO · oficina realista</div>
+  {#if active && !open}
+    <div class="prompt"><span class="key">E</span> {active.label}{#if active.sub} · <small>{active.sub}</small>{/if}</div>
+  {/if}
 
-  {#if !ready && !failed}<div class="loader">Cargando despacho…</div>{/if}
+  {#if toast}<div class="toast">{toast}</div>{/if}
+
+  <div class="hint">EXPLORA EL DESPACHO USANDO <b>W, A, S, D</b> O ARRASTRA</div>
+  <div class="badge">PROENZA · despacho virtual</div>
+  {#if !ready && !failed}<div class="loader">Entrando al despacho…</div>{/if}
+
+  <!-- PANEL de interacción -->
+  {#if open}
+    <div class="overlay">
+      <button class="scrim" aria-label="Cerrar" onclick={closeStation}></button>
+      <div class="sheet">
+        <div class="sheet-head">
+          <h3>{open.type === 'office' ? `Agenda con ${open.lawyer.name}` : open.type === 'reception' ? 'Deja tu caso' : 'Biblioteca'}</h3>
+          <button class="x" onclick={closeStation}>✕</button>
+        </div>
+        <div class="sheet-body">
+          {#if open.type === 'office'}
+            <div class="law"><span class="mono">{initials(open.lawyer.name)}</span><div><b>{open.lawyer.name}</b><small>{open.lawyer.role}</small></div></div>
+            <p>{open.lawyer.bio}</p>
+            <form class="form" onsubmit={(e) => citaWhats(e, open.lawyer)}>
+              <div class="row"><label>Nombre<input bind:value={f.nombre} required /></label><label>Contacto<input bind:value={f.contacto} required placeholder="WhatsApp / correo" /></label></div>
+              <div class="row"><label>Fecha preferida<input type="date" bind:value={f.fecha} /></label><label>Detalle<input bind:value={f.mensaje} placeholder="opcional" /></label></div>
+              <button class="send" type="submit">Agendar por WhatsApp</button>
+            </form>
+          {:else if open.type === 'reception'}
+            <p>Cuéntanos tu situación y nuestro equipo la analiza para orientarte.</p>
+            <form class="form" onsubmit={casoWhats}>
+              <div class="row"><label>Nombre<input bind:value={f.nombre} required /></label><label>Contacto<input bind:value={f.contacto} required placeholder="WhatsApp / correo" /></label></div>
+              <label>Tu caso<textarea rows="4" bind:value={f.mensaje} required></textarea></label>
+              <button class="send" type="submit">Enviar caso por WhatsApp</button>
+            </form>
+          {:else}
+            {#if !selPost}
+              <div class="grid">
+                {#each posts as p}
+                  <button class="card" onclick={() => (selPost = p)}><span class="tag">{p.area}</span><b>{p.title}</b><small>{formatDate(p.date)} · {p.readingMinutes} min</small></button>
+                {/each}
+              </div>
+            {:else}
+              {@const A = selPost.component}
+              <button class="back" onclick={() => (selPost = null)}>← Biblioteca</button>
+              <article class="prose"><h4>{selPost.title}</h4><A /></article>
+            {/if}
+          {/if}
+        </div>
+      </div>
+    </div>
+  {/if}
 </div>
 
 <style>
-  .demo { position: fixed; inset: 0; overflow: hidden; background: #c7d2dd; font-family: var(--ui-font, system-ui, sans-serif); }
+  .demo { position: fixed; inset: 0; overflow: hidden; background: #cdd6df; font-family: var(--ui-font, system-ui, sans-serif); }
   canvas { display: block; width: 100%; height: 100%; cursor: grab; touch-action: none; }
-  .nav { position: absolute; top: 18px; left: 18px; right: 18px; display: flex; justify-content: space-between; align-items: center; gap: 1rem; pointer-events: none; }
-  .nav nav { background: rgba(255,255,255,0.16); backdrop-filter: blur(8px); color: #fff; font-size: 0.72rem; letter-spacing: 0.08em; padding: 0.6rem 1rem; border-radius: 8px; text-shadow: 0 1px 4px rgba(0,0,0,0.4); }
-  .nav .contact { display: flex; gap: 0.8rem; }
-  .nav .contact span { background: rgba(255,255,255,0.16); backdrop-filter: blur(8px); color: #fff; font-size: 0.72rem; padding: 0.5rem 0.8rem; border-radius: 999px; text-shadow: 0 1px 4px rgba(0,0,0,0.4); }
-  .info { position: absolute; top: 50%; right: 5vw; transform: translateY(-50%); width: 260px; background: rgba(255,255,255,0.14); backdrop-filter: blur(14px); border: 1px solid rgba(255,255,255,0.3); border-radius: 16px; padding: 1.4rem; color: #fff; text-shadow: 0 1px 4px rgba(0,0,0,0.4); box-shadow: 0 18px 50px rgba(0,0,0,0.25); }
-  .info h2 { font-size: 0.95rem; line-height: 1.3; margin: 0 0 0.9rem; }
-  .info ul { margin: 0 0 1.1rem; padding-left: 1.1rem; display: grid; gap: 0.35rem; font-size: 0.85rem; }
-  .info button { width: 100%; padding: 0.7rem; border: 1px solid rgba(255,255,255,0.5); background: rgba(255,255,255,0.12); color: #fff; border-radius: 999px; font: inherit; font-size: 0.82rem; cursor: pointer; }
-  .info button:hover { background: rgba(255,255,255,0.25); }
-  .hint { position: absolute; right: 18px; bottom: 16px; color: #fff; font-size: 0.66rem; letter-spacing: 0.1em; text-align: right; text-shadow: 0 1px 4px rgba(0,0,0,0.5); }
-  .badge { position: absolute; left: 18px; bottom: 16px; color: rgba(255,255,255,0.85); font-size: 0.66rem; letter-spacing: 0.1em; text-shadow: 0 1px 4px rgba(0,0,0,0.5); }
-  .loader { position: absolute; inset: 0; display: grid; place-content: center; color: #33414f; font-size: 1rem; }
-  @media (max-width: 640px) { .info { right: 50%; transform: translate(50%, -50%); width: 80vw; max-width: 280px; } }
+  .nav { position: absolute; top: 16px; left: 16px; right: 16px; display: flex; justify-content: space-between; gap: 1rem; pointer-events: none; }
+  .nav nav, .nav .contact span { background: rgba(255,255,255,0.14); backdrop-filter: blur(8px); color: #fff; font-size: 0.7rem; letter-spacing: 0.06em; padding: 0.55rem 0.9rem; border-radius: 8px; text-shadow: 0 1px 4px rgba(0,0,0,0.4); }
+  .nav .contact { display: flex; gap: 0.6rem; }
+  .nav .contact span { border-radius: 999px; }
+  .explore { position: absolute; top: 50%; right: 4vw; transform: translateY(-50%); width: 270px; background: rgba(20,28,38,0.32); backdrop-filter: blur(14px); border: 1px solid rgba(255,255,255,0.28); border-radius: 16px; padding: 1.3rem; color: #fff; text-shadow: 0 1px 4px rgba(0,0,0,0.5); box-shadow: 0 18px 50px rgba(0,0,0,0.3); }
+  .explore h2 { font-size: 1rem; margin: 0 0 0.8rem; }
+  .explore .poi { font-size: 0.78rem; opacity: 0.85; margin: 0 0 0.4rem; }
+  .explore ul { list-style: none; margin: 0 0 0.8rem; padding: 0; display: grid; gap: 0.3rem; font-size: 0.84rem; }
+  .explore li.done { color: #9fe6c0; }
+  .explore .next { font-size: 0.8rem; margin: 0 0 0.9rem; }
+  .cta { display: block; width: 100%; text-align: center; padding: 0.7rem; border: 1px solid rgba(255,255,255,0.5); background: rgba(255,255,255,0.14); color: #fff; border-radius: 999px; font: inherit; font-size: 0.78rem; cursor: pointer; }
+  .cta.ghost { opacity: 0.6; cursor: default; }
+  .prompt { position: absolute; left: 50%; bottom: 12vh; transform: translateX(-50%); background: rgba(255,255,255,0.92); color: #14202e; padding: 0.55rem 1rem; border-radius: 999px; font-size: 0.9rem; box-shadow: 0 8px 24px rgba(0,0,0,0.25); display: flex; align-items: center; gap: 0.5rem; }
+  .prompt .key { background: #14202e; color: #fff; border-radius: 5px; padding: 0 6px; font-size: 0.72rem; font-weight: 700; }
+  .toast { position: absolute; left: 50%; top: 12%; transform: translateX(-50%); background: rgba(20,28,38,0.9); color: #fff; padding: 0.7rem 1.1rem; border-radius: 12px; font-size: 0.9rem; }
+  .hint { position: absolute; right: 16px; bottom: 14px; color: #fff; font-size: 0.64rem; letter-spacing: 0.08em; text-align: right; text-shadow: 0 1px 4px rgba(0,0,0,0.5); }
+  .badge { position: absolute; left: 16px; bottom: 14px; color: rgba(255,255,255,0.85); font-size: 0.64rem; letter-spacing: 0.08em; text-shadow: 0 1px 4px rgba(0,0,0,0.5); }
+  .loader { position: absolute; inset: 0; display: grid; place-content: center; color: #33414f; }
+
+  .overlay { position: absolute; inset: 0; display: flex; justify-content: center; align-items: center; z-index: 20; }
+  .scrim { position: absolute; inset: 0; border: 0; background: rgba(8,14,28,0.5); backdrop-filter: blur(4px); cursor: pointer; }
+  .sheet { position: relative; width: min(640px, 92vw); max-height: 86vh; background: #fffdf8; border-radius: 16px; display: flex; flex-direction: column; box-shadow: 0 24px 70px rgba(0,0,0,0.4); }
+  .sheet-head { display: flex; justify-content: space-between; align-items: center; padding: 1rem 1.3rem; border-bottom: 1px solid #e7e2d6; }
+  .sheet-head h3 { margin: 0; font-family: Georgia, serif; font-size: 1.25rem; color: #14202e; }
+  .x { width: 36px; height: 36px; border-radius: 50%; border: 1px solid #e7e2d6; background: #fff; cursor: pointer; }
+  .sheet-body { padding: 1.3rem; overflow-y: auto; color: #14202e; }
+  .law { display: flex; align-items: center; gap: 0.7rem; margin-bottom: 0.6rem; }
+  .mono { width: 50px; height: 50px; border-radius: 50%; display: grid; place-items: center; background: #1b4d89; color: #fff; font-weight: 700; }
+  .law small { display: block; color: #45525f; }
+  .form { display: grid; gap: 0.8rem; margin-top: 0.5rem; }
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 0.8rem; }
+  label { display: grid; gap: 0.3rem; font-size: 0.84rem; font-weight: 600; }
+  input, textarea { font: inherit; font-weight: 400; padding: 0.6rem 0.75rem; border: 1px solid #ddd; border-radius: 8px; }
+  .send { padding: 0.8rem; border: 0; border-radius: 999px; background: linear-gradient(180deg, #ddb869, #c29a4b); color: #2a2008; font-weight: 700; cursor: pointer; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.8rem; }
+  .card { text-align: left; border: 1px solid #e7e2d6; background: #fff; border-radius: 12px; padding: 1rem; cursor: pointer; display: grid; gap: 0.3rem; }
+  .tag { font-size: 0.7rem; color: #1b4d89; text-transform: capitalize; }
+  .back { background: none; border: 0; color: #1b4d89; font-weight: 600; cursor: pointer; padding: 0 0 0.6rem; }
+  .prose :global(h2) { font-size: 1.1rem; margin-top: 1.2rem; }
+  @media (max-width: 640px) { .explore { right: 50%; transform: translate(50%, 0); top: auto; bottom: 12vh; width: 86vw; max-width: 320px; } .row { grid-template-columns: 1fr; } .grid { grid-template-columns: 1fr; } }
 </style>
