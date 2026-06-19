@@ -369,6 +369,20 @@ export function buildWorld(THREE, options = {}) {
     placeOnSurface(g, dir)
     builders[def.id](g)
 
+    // Orienta la zona para que su frente (+Z local: mostradores, letreros) mire
+    // hacia el recibidor, de modo que se vea de frente al llegar por el pasillo.
+    {
+      const up = dir.clone()
+      const curZ = new THREE.Vector3(0, 0, 1).applyQuaternion(g.quaternion)
+      const toLobby = plazaDir.clone().sub(dir)
+      toLobby.sub(up.clone().multiplyScalar(toLobby.dot(up)))
+      if (toLobby.lengthSq() > 1e-6) {
+        toLobby.normalize()
+        const cross = new THREE.Vector3().crossVectors(curZ, toLobby)
+        g.rotateY(Math.atan2(cross.dot(up), curZ.dot(toLobby)))
+      }
+    }
+
     const col = new THREE.Color(def.color)
     const orb = new THREE.Mesh(
       new THREE.IcosahedronGeometry(0.34, 1),
@@ -392,7 +406,8 @@ export function buildWorld(THREE, options = {}) {
     g.add(ring)
 
     group.add(g)
-    return { ...def, group: g, orb, halo, ring, worldPos: pointOnSurface(dir).clone(), anchor: pointOnSurface(dir, 4.3).clone() }
+    const front = new THREE.Vector3(0, 0, 1).applyQuaternion(g.quaternion)
+    return { ...def, group: g, orb, halo, ring, front, worldPos: pointOnSurface(dir).clone(), anchor: pointOnSurface(dir, 4.3).clone() }
   })
 
   // --- pasillos (alfombras corridas) entre el recibidor y cada zona ---------

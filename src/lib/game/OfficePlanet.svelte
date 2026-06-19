@@ -183,9 +183,11 @@
       let pos = spawn.worldPos.clone().normalize().multiplyScalar(R)
       {
         const upS = pos.clone().normalize()
-        const tan = new THREE.Vector3(0, 1, 0).cross(upS)
-        if (tan.lengthSq() < 1e-4) tan.set(1, 0, 0)
-        pos.addScaledVector(tan.normalize(), 4.2).normalize().multiplyScalar(R)
+        // Nace por delante de la recepción (su lado "frente") para ver el letrero.
+        let tan = spawn.front ? spawn.front.clone() : new THREE.Vector3(0, 1, 0).cross(upS)
+        tan.sub(upS.clone().multiplyScalar(tan.dot(upS)))
+        if (tan.lengthSq() < 1e-4) tan = new THREE.Vector3(0, 1, 0).cross(upS)
+        pos.addScaledVector(tan.normalize(), 5).normalize().multiplyScalar(R)
       }
       let height = 0, velY = 0, grounded = true
       const forward = spawn.worldPos.clone().sub(pos)
