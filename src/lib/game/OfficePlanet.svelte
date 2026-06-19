@@ -137,6 +137,21 @@
       sky.rotation.y = Math.PI // mueve la costura del panorama detrás de la vista inicial
       scene.add(sky)
 
+      // Iluminación de entorno (IBL): un PMREM del cielo ilumina y "asienta"
+      // todos los materiales PBR (modelos 3D + primitivas) — unifica el look.
+      if (skyGhibli) {
+        const pmrem = new THREE.PMREMGenerator(renderer)
+        pmrem.compileEquirectangularShader()
+        new THREE.TextureLoader().load(skyGhibli, (tex) => {
+          tex.mapping = THREE.EquirectangularReflectionMapping
+          tex.colorSpace = THREE.SRGBColorSpace
+          scene.environment = pmrem.fromEquirectangular(tex).texture
+          if ('environmentIntensity' in scene) scene.environmentIntensity = 0.85
+          tex.dispose()
+          pmrem.dispose()
+        })
+      }
+
       // --- estrellas (dos capas para dar profundidad) -------------------------
       for (const [count, size, near, far, col] of [
         [900, 0.9, 140, 240, 0xcfe0ff],
@@ -154,6 +169,23 @@
         scene.add(new THREE.Points(g, new THREE.PointsMaterial({ color: col, size, sizeAttenuation: true })))
       }
 
+      // --- motas de polvo cálidas (atmósfera / profundidad) -------------------
+      const dustGeo = new THREE.BufferGeometry()
+      const dustN = mobile ? 120 : 260
+      const dustArr = new Float32Array(dustN * 3)
+      for (let i = 0; i < dustN; i++) {
+        const u = Math.acos(2 * pseudo(i + 3) - 1)
+        const th = 2 * Math.PI * pseudo(i + 31)
+        const rr = 16.5 + pseudo(i + 5) * 7
+        dustArr.set([rr * Math.sin(u) * Math.cos(th), rr * Math.cos(u), rr * Math.sin(u) * Math.sin(th)], i * 3)
+      }
+      dustGeo.setAttribute('position', new THREE.BufferAttribute(dustArr, 3))
+      const dust = new THREE.Points(
+        dustGeo,
+        new THREE.PointsMaterial({ color: 0xffe9c2, size: 0.13, transparent: true, opacity: 0.5, sizeAttenuation: true, depthWrite: false, blending: THREE.AdditiveBlending })
+      )
+      scene.add(dust)
+
       // --- sol con resplandor (florece con el bloom) --------------------------
       const sunDir = new THREE.Vector3(0.5, 0.62, 0.32).normalize()
       const glowTex = radialTexture(THREE)
@@ -162,9 +194,9 @@
       sunGlow.scale.setScalar(90)
       scene.add(sunGlow)
 
-      // --- luces ---------------------------------------------------------------
-      scene.add(new THREE.HemisphereLight(0xbcd6ff, 0x223b22, 0.9))
-      const sun = new THREE.DirectionalLight(0xfff2d6, 2.6)
+      // --- luces (el entorno IBL aporta el relleno ambiental) -----------------
+      scene.add(new THREE.HemisphereLight(0xbcd6ff, 0x2a3326, 0.4))
+      const sun = new THREE.DirectionalLight(0xfff0d0, 2.4)
       sun.position.copy(sunDir.clone().multiplyScalar(45))
       sun.castShadow = true
       const sm = mobile ? 1024 : 2048
@@ -308,15 +340,25 @@
       // --- post-procesado (bloom) ---------------------------------------------
       let composer = null
       try {
-        const [{ EffectComposer }, { RenderPass }, { UnrealBloomPass }, { OutputPass }] = await Promise.all([
+        const [{ EffectComposer }, { RenderPass }, { UnrealBloomPass }, { OutputPass }, gtaoMod] = await Promise.all([
           import('three/examples/jsm/postprocessing/EffectComposer.js'),
           import('three/examples/jsm/postprocessing/RenderPass.js'),
           import('three/examples/jsm/postprocessing/UnrealBloomPass.js'),
           import('three/examples/jsm/postprocessing/OutputPass.js'),
+          mobile ? Promise.resolve({}) : import('three/examples/jsm/postprocessing/GTAOPass.js'),
         ])
         composer = new EffectComposer(renderer)
         composer.addPass(new RenderPass(scene, camera))
-        const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), mobile ? 0.5 : 0.7, 0.5, 0.82)
+        // Oclusión ambiental (sombras de contacto que "asientan" los objetos).
+        if (gtaoMod.GTAOPass) {
+          const gtao = new gtaoMod.GTAOPass(scene, camera, innerWidth, innerHeight)
+          gtao.output = gtaoMod.GTAOPass.OUTPUT.Default
+          gtao.blendIntensity = 0.85
+          gtao.updateGtaoMaterial({ radius: 0.45, distanceExponent: 1, thickness: 1, scale: 1, samples: 16, distanceFallOff: 1, screenSpaceRadius: false })
+          composer.addPass(gtao)
+          composer._gtao = gtao
+        }
+        const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), mobile ? 0.5 : 0.65, 0.5, 0.82)
         composer.addPass(bloom)
         composer.addPass(new OutputPass())
         composer._bloom = bloom
@@ -419,6 +461,8 @@
         const dt = Math.min(clock.getDelta(), 0.05)
         const t = clock.elapsedTime
         const up = pos.clone().normalize()
+        dust.rotation.y += dt * 0.012
+        dust.rotation.x += dt * 0.005
 
         if (!paused) {
           let camF = tmp.subVectors(pos, camera.position)
@@ -485,14 +529,15 @@
           }
           if (best !== active) active = best
         } else {
-          // órbita cinematográfica detrás del panel
-          pausedYaw += dt * 0.12
+          // Cámara cinematográfica al entrar: acercamiento suave + leve deriva,
+          // mirando hacia la zona (lo que el visitante tiene delante).
+          pausedYaw += dt * 0.06
           const c = avatar.position.clone()
-          const off = forward.clone().negate().applyAxisAngle(up, Math.sin(pausedYaw) * 0.5)
-          const target = c.clone().addScaledVector(up, 4.2).addScaledVector(off, 7.5)
-          camera.position.lerp(target, 1 - Math.pow(0.05, dt))
+          const off = boom.clone().applyAxisAngle(up, Math.sin(pausedYaw) * 0.22)
+          const target = c.clone().addScaledVector(up, 3.0).addScaledVector(off, 5.2)
+          camera.position.lerp(target, 1 - Math.pow(0.02, dt))
           camera.up.copy(up)
-          camera.lookAt(c.clone().addScaledVector(up, 1.4))
+          camera.lookAt(c.clone().addScaledVector(up, 1.3).addScaledVector(forward, 0.7))
         }
 
         // orbes + etiquetas (con desvanecido por distancia)
