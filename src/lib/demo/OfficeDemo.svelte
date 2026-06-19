@@ -4,6 +4,7 @@
   import { abogados, initials } from '$lib/data/abogados.js'
   import { posts, formatDate } from '$lib/data/posts.js'
   import logoUrl from '$lib/assets/brand/logo.svg'
+  import ambienteUrl from '$lib/assets/audio/ambiente.m4a'
 
   let { cityUrl = '', envUrl = '' } = $props()
 
@@ -17,6 +18,14 @@
   let discovered = $state([]) // ids visitados
   let toast = $state('')
   let stationsUI = $state([])
+  let camYaw = $state(0) // para la brújula
+  let soundOn = $state(false)
+  let audioEl = null
+  function toggleSound() {
+    if (!audioEl) { audioEl = new Audio(ambienteUrl); audioEl.loop = true; audioEl.volume = 0.3 }
+    if (soundOn) { audioEl.pause(); soundOn = false }
+    else audioEl.play().then(() => (soundOn = true)).catch(() => (soundOn = false))
+  }
 
   // Estaciones del despacho (la geometría se construye en onMount).
   const STATIONS = [
@@ -142,7 +151,13 @@
         box(0.25, 0.05, 1.6, M.lamp, 0, H - 0.04, z)
         const pl = new THREE.PointLight(0xfff2de, 6, 12, 2); pl.position.set(0, H - 0.4, z); grp.add(pl)
       }
-      const day = new THREE.DirectionalLight(0xfff6e8, 1.5); day.position.set(20, 12, 6); day.castShadow = true
+      // cove perimetral del techo (brillo suave que florece con el bloom)
+      const cove = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xffe6c0, emissiveIntensity: 1.7 })
+      box(0.08, 0.05, totalZ, cove, X_LBACK + 0.16, H - 0.13, midZ)
+      box(0.08, 0.05, totalZ, cove, X_R - 0.16, H - 0.13, midZ)
+      box(X_R - X_LBACK, 0.05, 0.08, cove, (X_R + X_LBACK) / 2, H - 0.13, HALL_Z0 + 0.22)
+      box(X_R - X_LBACK, 0.05, 0.08, cove, (X_R + X_LBACK) / 2, H - 0.13, HALL_Z1 - 0.22)
+      const day = new THREE.DirectionalLight(0xfff6e8, 1.95); day.position.set(20, 12, 6); day.castShadow = true
       day.shadow.mapSize.set(2048, 2048); day.shadow.camera.near = 1; day.shadow.camera.far = 80
       Object.assign(day.shadow.camera, { left: -16, right: 16, top: 14, bottom: -14 }); day.shadow.bias = -0.0005
       grp.add(day, day.target)
@@ -207,6 +222,15 @@
       }
       // recepción punto de proximidad
       proxPoints.push({ s: STATIONS.find((x) => x.id === 'recepcion'), x: -1.2, z: HALL_Z0 + 3.0 })
+
+      // puntos de enfoque para la transición de cámara al entrar a una zona
+      const V = (x, y, z) => new THREE.Vector3(x, y, z)
+      const focusMap = {}
+      for (const a of STATIONS.filter((x) => x.type === 'office')) focusMap[a.id] = { eye: V(X_L + 1.0, 1.6, a.z), look: V(X_L - 2.6, 1.35, a.z) }
+      focusMap.recepcion = { eye: V(-1.2, 1.6, HALL_Z0 + 3.8), look: V(-1.2, 1.85, HALL_Z0 + 0.2) }
+      focusMap.biblioteca = { eye: V(X_R - 1.7, 1.6, 8.5), look: V(X_R - 0.4, 1.5, 8.5) }
+      const _dummy = new THREE.Object3D()
+      let wasOpen = false
 
       // --- líneas guía luminosas en el piso ----------------------------------
       box(0.12, 0.02, totalZ - 1, M.line, 0, 0.02, midZ) // línea central
@@ -279,6 +303,12 @@
         raf = requestAnimationFrame(frame)
         const dt = Math.min(clock.getDelta(), 0.05)
         if (!open) {
+          if (wasOpen) {
+            // al cerrar, retoma desde donde quedó la cámara (sin salto)
+            cpos.copy(camera.position); cpos.y = eye
+            const e = new THREE.Euler().setFromQuaternion(camera.quaternion, 'YXZ')
+            yaw = e.y; pitch = Math.max(-1.0, Math.min(0.85, e.x)); wasOpen = false
+          }
           // A/D giran la cámara; W/S avanzan/retroceden (intuitivo para un pasillo).
           let turn = 0, mz = 0
           if (keys.has('w') || keys.has('arrowup')) mz += 1
@@ -294,11 +324,21 @@
             cpos.z = Math.max(HALL_Z0 + 1.2, Math.min(HALL_Z1 - 0.6, cpos.z))
           }
           cpos.y = eye; camera.position.copy(cpos)
+          camYaw = yaw
           // proximidad
           let best = null, bd = 2.6
           for (const p of proxPoints) { const d = Math.hypot(cpos.x - p.x, cpos.z - p.z); if (d < bd) { bd = d; best = p.s } }
           const cur = best ? { id: best.id, label: best.label, sub: best.sub, type: best.type } : null
           if ((cur?.id || null) !== (active?.id || null)) active = cur
+        } else {
+          // transición cinematográfica al entrar a una zona
+          wasOpen = true
+          const fm = focusMap[open.id]
+          if (fm) {
+            _dummy.position.copy(camera.position); _dummy.up.set(0, 1, 0); _dummy.lookAt(fm.look)
+            camera.quaternion.slerp(_dummy.quaternion, 1 - Math.pow(0.05, dt))
+            camera.position.lerp(fm.eye, 1 - Math.pow(0.03, dt))
+          }
         }
         if (composer) composer.render(); else renderer.render(scene, camera)
         if (!ready) ready = true
@@ -359,6 +399,11 @@
 
   <div class="hint"><b>W/S</b> avanzar · <b>A/D</b> girar · arrastra para mirar</div>
   <div class="badge">PROENZA · despacho virtual</div>
+
+  <!-- brújula -->
+  <div class="compass"><div class="dial" style={`transform: rotate(${-camYaw}rad)`}><span class="n">N</span><div class="needle"></div></div></div>
+  <!-- sonido -->
+  <button class="sound" onclick={toggleSound} aria-label={soundOn ? 'Silenciar' : 'Activar sonido'}>{soundOn ? '🔊' : '🔈'}</button>
 
   <!-- controles táctiles -->
   <div class="mctrl">
@@ -440,6 +485,11 @@
   .toast { position: absolute; left: 50%; top: 12%; transform: translateX(-50%); background: rgba(20,28,38,0.9); color: #fff; padding: 0.7rem 1.1rem; border-radius: 12px; font-size: 0.9rem; }
   .hint { position: absolute; right: 16px; bottom: 14px; color: #fff; font-size: 0.64rem; letter-spacing: 0.08em; text-align: right; text-shadow: 0 1px 4px rgba(0,0,0,0.5); }
   .badge { position: absolute; left: 16px; bottom: 14px; color: rgba(255,255,255,0.85); font-size: 0.64rem; letter-spacing: 0.08em; text-shadow: 0 1px 4px rgba(0,0,0,0.5); }
+  .compass { position: absolute; right: 18px; bottom: 44px; width: 52px; height: 52px; border-radius: 50%; background: rgba(20,28,38,0.5); backdrop-filter: blur(6px); border: 1px solid rgba(255,255,255,0.3); pointer-events: none; }
+  .compass .dial { width: 100%; height: 100%; position: relative; }
+  .compass .n { position: absolute; top: 2px; left: 50%; transform: translateX(-50%); color: #ffd166; font-size: 0.6rem; font-weight: 700; }
+  .compass .needle { position: absolute; top: 9px; left: 50%; transform: translateX(-50%); width: 0; height: 0; border-left: 4px solid transparent; border-right: 4px solid transparent; border-bottom: 15px solid #e0533f; }
+  .sound { position: absolute; right: 18px; bottom: 104px; width: 40px; height: 40px; border-radius: 50%; border: 1px solid rgba(255,255,255,0.3); background: rgba(20,28,38,0.5); backdrop-filter: blur(6px); color: #fff; font-size: 1rem; cursor: pointer; }
   .mctrl { position: absolute; left: 16px; bottom: 40px; display: none; align-items: center; gap: 8px; z-index: 10; }
   .mctrl button { width: 50px; height: 50px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.3); background: rgba(20,28,38,0.5); backdrop-filter: blur(6px); color: #fff; font-size: 1.05rem; cursor: pointer; touch-action: none; user-select: none; display: grid; place-items: center; }
   .mctrl .mcol { display: grid; gap: 6px; }
