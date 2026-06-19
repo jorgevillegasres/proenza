@@ -340,11 +340,12 @@
       // --- post-procesado (bloom) ---------------------------------------------
       let composer = null
       try {
-        const [{ EffectComposer }, { RenderPass }, { UnrealBloomPass }, { OutputPass }, gtaoMod] = await Promise.all([
+        const [{ EffectComposer }, { RenderPass }, { UnrealBloomPass }, { OutputPass }, { ShaderPass }, gtaoMod] = await Promise.all([
           import('three/examples/jsm/postprocessing/EffectComposer.js'),
           import('three/examples/jsm/postprocessing/RenderPass.js'),
           import('three/examples/jsm/postprocessing/UnrealBloomPass.js'),
           import('three/examples/jsm/postprocessing/OutputPass.js'),
+          import('three/examples/jsm/postprocessing/ShaderPass.js'),
           mobile ? Promise.resolve({}) : import('three/examples/jsm/postprocessing/GTAOPass.js'),
         ])
         composer = new EffectComposer(renderer)
@@ -354,13 +355,33 @@
           const gtao = new gtaoMod.GTAOPass(scene, camera, innerWidth, innerHeight)
           gtao.output = gtaoMod.GTAOPass.OUTPUT.Default
           gtao.blendIntensity = 0.85
-          gtao.updateGtaoMaterial({ radius: 0.45, distanceExponent: 1, thickness: 1, scale: 1, samples: 16, distanceFallOff: 1, screenSpaceRadius: false })
+          gtao.updateGtaoMaterial({ radius: 0.45, distanceExponent: 1, thickness: 1, scale: 1, samples: 8, distanceFallOff: 1, screenSpaceRadius: false })
           composer.addPass(gtao)
           composer._gtao = gtao
         }
         const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), mobile ? 0.5 : 0.65, 0.5, 0.82)
         composer.addPass(bloom)
         composer.addPass(new OutputPass())
+        // Gradación de color cálida (look cinematográfico, en espacio de pantalla).
+        const grade = new ShaderPass({
+          uniforms: {
+            tDiffuse: { value: null },
+            warmth: { value: 1.0 },
+            contrast: { value: 1.06 },
+            saturation: { value: 1.12 },
+          },
+          vertexShader: `varying vec2 vUv; void main(){ vUv=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0); }`,
+          fragmentShader: `uniform sampler2D tDiffuse; uniform float warmth, contrast, saturation; varying vec2 vUv;
+            void main(){
+              vec3 c = texture2D(tDiffuse, vUv).rgb;
+              c *= vec3(1.0 + warmth*0.05, 1.0 + warmth*0.012, 1.0 - warmth*0.045);
+              c = (c - 0.5) * contrast + 0.5;
+              float l = dot(c, vec3(0.299, 0.587, 0.114));
+              c = mix(vec3(l), c, saturation);
+              gl_FragColor = vec4(clamp(c, 0.0, 1.0), 1.0);
+            }`,
+        })
+        composer.addPass(grade)
         composer._bloom = bloom
       } catch {
         composer = null
