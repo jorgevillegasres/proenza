@@ -490,7 +490,7 @@
           camF.sub(up.clone().multiplyScalar(camF.dot(up)))
           if (camF.lengthSq() < 1e-6) camF.copy(forward)
           camF.normalize()
-          const camR = new THREE.Vector3().crossVectors(up, camF).normalize()
+          const camR = new THREE.Vector3().crossVectors(camF, up).normalize()
 
           let f = 0, r = 0
           if (keys.has('w') || keys.has('arrowup')) f += 1
