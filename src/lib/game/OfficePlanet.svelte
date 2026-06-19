@@ -11,12 +11,17 @@
   import rugGhibli from '$lib/assets/textures/rug-ghibli.jpg'
   import marbleGhibli from '$lib/assets/textures/marble-ghibli.jpg'
   import foliageGhibli from '$lib/assets/textures/foliage-ghibli.jpg'
+  import floorGhibli from '$lib/assets/textures/floor-ghibli.jpg'
+  import wallGhibli from '$lib/assets/textures/wall-ghibli.jpg'
   import skyGhibli from '$lib/assets/textures/sky-ghibli.jpg'
+  import ambienteUrl from '$lib/assets/audio/ambiente.m4a'
   const textures = {
     wood: woodGhibli,
     rug: rugGhibli,
     marble: marbleGhibli,
     foliage: foliageGhibli,
+    floor: floorGhibli,
+    wall: wallGhibli,
   }
 
   const SPEED = 7.5
@@ -38,6 +43,23 @@
   const keys = new Set()
   const touch = { active: false, x: 0, y: 0 }
   let paused = false
+
+  // Música ambiente (silenciada por defecto; se activa con el botón).
+  let soundOn = $state(false)
+  let audioEl = null
+  function toggleSound() {
+    if (!audioEl) {
+      audioEl = new Audio(ambienteUrl)
+      audioEl.loop = true
+      audioEl.volume = 0.35
+    }
+    if (soundOn) {
+      audioEl.pause()
+      soundOn = false
+    } else {
+      audioEl.play().then(() => (soundOn = true)).catch(() => (soundOn = false))
+    }
+  }
 
   function open(id) {
     openSection = id
@@ -423,6 +445,10 @@
       </div>
     </header>
 
+    <button class="sound" onclick={toggleSound} aria-label={soundOn ? 'Silenciar música' : 'Activar música ambiente'}>
+      {soundOn ? '🔊' : '🔈'}
+    </button>
+
     {#if active >= 0 && !openSection}
       <div class="prompt">
         <button class="enter" onclick={() => open(stationsUI[active].id)}>
@@ -508,6 +534,8 @@
   .joy-base { position: absolute; width: 120px; height: 120px; border-radius: 50%; transform: translate(-50%,-50%); background: rgba(255,255,255,0.08); border: 2px solid rgba(255,255,255,0.25); pointer-events: none; }
   .joy-knob { position: absolute; width: 54px; height: 54px; border-radius: 50%; transform: translate(-50%,-50%); background: rgba(255,255,255,0.85); box-shadow: var(--shadow-md); pointer-events: none; }
   .jump { position: absolute; right: 22px; bottom: 28px; width: 64px; height: 64px; border-radius: 50%; border: 1px solid rgba(255,255,255,0.3); background: rgba(10,18,38,0.55); backdrop-filter: blur(8px); color: #fff; font-size: 1.5rem; cursor: pointer; display: none; }
+  .sound { position: absolute; left: 16px; bottom: 20px; width: 44px; height: 44px; border-radius: 50%; border: 1px solid rgba(255,255,255,0.22); background: rgba(10,18,38,0.55); backdrop-filter: blur(8px); color: #fff; font-size: 1.1rem; cursor: pointer; display: grid; place-items: center; }
+  .sound:hover { background: rgba(10,18,38,0.75); }
 
   .loader { position: absolute; inset: 0; z-index: 70; display: grid; place-content: center; justify-items: center; gap: 0.7rem; background: radial-gradient(120% 100% at 50% 30%, #15294a, #0a1226); color: #fff; }
   .lmark { width: 64px; height: 64px; border-radius: 16px; display: grid; place-items: center; background: linear-gradient(150deg, var(--brand-bright), var(--ink)); font-family: var(--font-display); font-weight: 700; font-size: 2rem; }

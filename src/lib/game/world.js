@@ -83,10 +83,10 @@ export function buildWorld(THREE, options = {}) {
       m.needsUpdate = true
     }
   }
-  applyTex([P.floor], TEX.wood, 10) // piso de madera (muy repetido)
+  applyTex([P.floor], TEX.floor || TEX.wood, 12) // piso de tablones (muy repetido)
   applyTex([P.wood, P.woodDark], TEX.wood, 1) // mobiliario
   applyTex([P.rug], TEX.rug, 1) // alfombras (un marco por alfombra)
-  applyTex([P.cream, P.white], TEX.marble, 1) // paredes/tabiques
+  applyTex([P.cream, P.white], TEX.wall || TEX.marble, 2) // paredes/tabiques
   applyTex([P.leaf, P.leaf2], TEX.foliage, 2) // plantas
 
   const dirV = (d) => new THREE.Vector3(...d).normalize()
@@ -208,6 +208,44 @@ export function buildWorld(THREE, options = {}) {
     parent.add(g)
   }
 
+  // Textura de texto (canvas) para letreros legibles — corre en cliente.
+  const makeTextTexture = (line1, line2) => {
+    const c = document.createElement('canvas')
+    c.width = 1024
+    c.height = 320
+    const ctx = c.getContext('2d')
+    ctx.clearRect(0, 0, c.width, c.height)
+    ctx.fillStyle = '#c7a14e'
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    ctx.font = '700 168px Georgia, "Times New Roman", serif'
+    ctx.fillText(line1, c.width / 2, 120)
+    if (line2) {
+      ctx.font = '600 84px Georgia, serif'
+      ctx.fillText(line2.split('').join(' '), c.width / 2, 250)
+    }
+    const t = new THREE.CanvasTexture(c)
+    t.colorSpace = THREE.SRGBColorSpace
+    t.anisotropy = 4
+    return t
+  }
+  const sign = (parent, line1, line2, x, y, z, w = 3.0, h = 0.95) => {
+    const m = new THREE.Mesh(
+      new THREE.PlaneGeometry(w, h),
+      new THREE.MeshBasicMaterial({ map: makeTextTexture(line1, line2), transparent: true, toneMapped: false })
+    )
+    m.position.set(x, y, z)
+    parent.add(m)
+    return m
+  }
+  const clock = (parent, x, y, z) => {
+    const face = cyl(parent, 0.34, 0.34, 0.06, P.white, x, y, z, 22)
+    face.rotation.x = Math.PI / 2
+    cyl(parent, 0.37, 0.37, 0.04, P.gold, x, y, z - 0.01, 22).rotation.x = Math.PI / 2
+    box(parent, 0.03, 0.22, 0.02, P.navy, x, y + 0.06, z + 0.04)
+    box(parent, 0.16, 0.03, 0.02, P.navy, x + 0.05, y, z + 0.04)
+  }
+
   // --- recibidor central: letrero + balanza de la justicia ------------------
   const plazaDir = dirV([0.18, 0.3, 0.96])
   const lobby = new THREE.Group()
@@ -236,11 +274,12 @@ export function buildWorld(THREE, options = {}) {
       box(g, 3.2, 0.14, 1.0, P.wood, 0, 1.05, -0.6)
       box(g, 0.8, 1.0, 1.6, P.navy, 1.5, 0.5, 0.2)
       box(g, 1.0, 0.14, 1.7, P.wood, 1.5, 1.05, 0.2)
-      // pared con letrero PROENZA + diplomas
-      box(g, 3.6, 2.0, 0.16, P.cream, 0, 1.4, -1.4)
-      for (let i = 0; i < 7; i++) box(g, 0.18, 0.34, 0.05, P.gold, -1.1 + i * 0.34, 1.9, -1.3) // "letras"
-      framedPic(g, -1.2, 1.1, -1.3, 0, 0.5, 0.4)
-      framedPic(g, 1.2, 1.1, -1.3, 0, 0.5, 0.4)
+      // pared con letrero PROENZA + diplomas + reloj
+      box(g, 3.8, 2.2, 0.16, P.cream, 0, 1.5, -1.4)
+      sign(g, 'PROENZA', 'ABOGADOS', 0, 2.0, -1.31, 3.0, 0.95)
+      framedPic(g, -1.4, 1.15, -1.31, 0, 0.5, 0.4)
+      framedPic(g, 1.4, 1.15, -1.31, 0, 0.5, 0.4)
+      clock(g, 0, 1.2, -1.31)
       // sala de espera
       box(g, 1.8, 0.5, 0.7, P.navy, -1.7, 0.45, 1.7) // sofá asiento
       box(g, 1.8, 0.5, 0.2, P.navy, -1.7, 0.75, 1.95) // respaldo
@@ -357,14 +396,25 @@ export function buildWorld(THREE, options = {}) {
   })
 
   // --- pasillos (alfombras corridas) entre el recibidor y cada zona ---------
+  // Cada segmento se orienta a lo largo del camino y se solapa con el siguiente
+  // para formar un corredor continuo, sin huecos.
   for (const s of stations) {
     const a = plazaDir.clone()
     const b = dirV(s.dir)
-    const steps = 12
+    const steps = 18
     for (let i = 1; i < steps; i++) {
       const d = slerpDir(a, b, i / steps)
-      const tile = new THREE.Mesh(new THREE.BoxGeometry(1.3, 0.05, 1.3), P.runner)
-      placeOnSurface(tile, d, 0.02)
+      const dPrev = slerpDir(a, b, (i - 0.6) / steps)
+      const dNext = slerpDir(a, b, (i + 0.6) / steps)
+      const up = d.clone().normalize()
+      const fwd = dNext.clone().sub(dPrev)
+      fwd.sub(up.clone().multiplyScalar(fwd.dot(up)))
+      if (fwd.lengthSq() < 1e-6) continue
+      fwd.normalize()
+      const right = new THREE.Vector3().crossVectors(up, fwd).normalize()
+      const tile = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.05, 1.9), P.runner)
+      tile.position.copy(pointOnSurface(d, 0.02))
+      tile.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(right, up, fwd))
       tile.receiveShadow = true
       group.add(tile)
     }
