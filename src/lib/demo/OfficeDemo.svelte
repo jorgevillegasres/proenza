@@ -6,6 +6,9 @@
   import logoUrl from '$lib/assets/brand/logo.svg'
   import logoLightUrl from '$lib/assets/brand/logo-light.svg'
   import ambienteUrl from '$lib/assets/audio/ambiente.m4a'
+  import monsteraUrl from '$lib/assets/demo/models/monstera.glb?url'
+  import lampUrl from '$lib/assets/demo/models/lamp.glb?url'
+  import laptopUrl from '$lib/assets/demo/models/laptop.glb?url'
 
   let { cityUrl = '', envUrl = '' } = $props()
 
@@ -80,6 +83,19 @@
       if (cancelled) return
       let RoundedBoxGeometry = null
       try { ({ RoundedBoxGeometry } = await import('three/examples/jsm/geometries/RoundedBoxGeometry.js')) } catch { RoundedBoxGeometry = null }
+      // Modelos 3D foto-reales (Higgsfield) — carga diferida con meshopt.
+      let GLB = { monstera: null, lamp: null, laptop: null }
+      try {
+        const [{ GLTFLoader }, { MeshoptDecoder }] = await Promise.all([
+          import('three/examples/jsm/loaders/GLTFLoader.js'),
+          import('three/examples/jsm/libs/meshopt_decoder.module.js'),
+        ])
+        const loader = new GLTFLoader(); loader.setMeshoptDecoder(MeshoptDecoder)
+        const load = (url) => new Promise((res) => loader.load(url, (g) => res(g.scene), undefined, () => res(null)))
+        const [mo, la, lp] = await Promise.all([load(monsteraUrl), load(lampUrl), load(laptopUrl)])
+        if (cancelled) return
+        GLB = { monstera: mo, lamp: la, laptop: lp }
+      } catch { /* sin modelos GLB */ }
 
       let renderer
       try { renderer = new THREE.WebGLRenderer({ canvas, antialias: true }); if (!renderer.getContext()) throw 0 } catch { failed = true; return }
@@ -152,6 +168,17 @@
         return new THREE.BoxGeometry(w, h, d)
       }
       const box = (w, h, d, material, x, y, z, ry = 0) => { const m = new THREE.Mesh(geom(w, h, d), material); m.position.set(x, y, z); m.rotation.y = ry; return addM(m) }
+      // Coloca un modelo GLB: escala a una altura objetivo, lo apoya en baseY y lo orienta.
+      const placeModel = (src, x, z, targetH, baseY = 0, ry = 0) => {
+        if (!src) return null
+        const obj = src.clone(true); obj.rotation.y = ry
+        let bb = new THREE.Box3().setFromObject(obj); const size = new THREE.Vector3(); bb.getSize(size)
+        obj.scale.setScalar(targetH / (size.y || 1))
+        bb = new THREE.Box3().setFromObject(obj); const c = new THREE.Vector3(); bb.getCenter(c)
+        obj.position.set(x - c.x, baseY - bb.min.y, z - c.z)
+        obj.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; if (o.material) o.material.envMapIntensity = 0.9 } })
+        grp.add(obj); return obj
+      }
       const planeM = (w, h, material, x, y, z, rx = 0, ry = 0) => { const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), material); m.position.set(x, y, z); m.rotation.set(rx, ry, 0); return addM(m, false, true) }
       const cyl = (rt, rb, h, material, x, y, z, seg = 18) => { const m = new THREE.Mesh(new THREE.CylinderGeometry(rt, rb, h, seg), material); m.position.set(x, y, z); return addM(m) }
       // Silla de oficina (asiento + respaldo redondeados, poste y base de patas).
@@ -304,10 +331,10 @@
         const desk = box(1.6, 0.9, 0.75, M.wood, X_L - 2.2, 0.45, zc, Math.PI / 2)
         box(1.75, 0.06, 0.9, M.deskTop, X_L - 2.2, 0.92, zc, Math.PI / 2)
         officeChair(X_L - 3.0, zc, Math.PI / 2)
-        // detalle interior: monitor, planta de esquina, diploma en la pared
-        box(0.5, 0.3, 0.04, M.dark, X_L - 2.4, 1.18, zc, Math.PI / 2)
-        box(0.14, 0.16, 0.1, M.dark, X_L - 2.3, 1.0, zc)
-        plant(X_LBACK + 0.55, zc + 1.05, 0.92)
+        // portátil + lámpara de diseño sobre el escritorio; Monstera en la esquina
+        if (!placeModel(GLB.laptop, X_L - 2.2, zc, 0.21, 0.95, Math.PI / 2)) { box(0.5, 0.3, 0.04, M.dark, X_L - 2.4, 1.18, zc, Math.PI / 2); box(0.14, 0.16, 0.1, M.dark, X_L - 2.3, 1.0, zc) }
+        placeModel(GLB.lamp, X_L - 2.7, zc + 0.6, 0.5, 0.95, -0.6)
+        if (!placeModel(GLB.monstera, X_LBACK + 0.75, zc + 1.05, 1.1, 0, 0.6)) plant(X_LBACK + 0.55, zc + 1.05, 0.92)
         box(0.45, 0.6, 0.04, mat(0xc6a05a, { metalness: 0.25, roughness: 0.4 }), X_LBACK + 0.05, 1.75, zc - 0.7, Math.PI / 2)
         // nombre en vinilo esmerilado sobre el cristal del frente (señalética integrada)
         const band = etchedSign(s.label, s.sub, 2.5, 0.62)
@@ -351,7 +378,7 @@
         box(2.2, 0.03, 1.8, mat(0x4a4640, { roughness: 0.95 }), X_R - 1.2, 0.015, zc) // alfombra
         for (const dz of [-0.78, 0.78]) armchair(X_R - 1.0, zc + dz, dz < 0 ? 0 : Math.PI, 0x2c3138) // enfrentados, junto al ventanal
         box(0.6, 0.4, 0.6, M.wood, X_R - 1.0, 0.2, zc)             // mesa de centro
-        plant(X_R - 1.7, zc - 1.5, 1.2)
+        if (!placeModel(GLB.monstera, X_R - 1.7, zc - 1.5, 1.35, 0, 0.3)) plant(X_R - 1.7, zc - 1.5, 1.2)
       }
 
       // --- rincón de café (izquierda, junto a la recepción) ------------------
@@ -360,7 +387,7 @@
         box(1.0, 0.9, 0.5, M.wood, X_LBACK + 0.5, 0.45, zc)
         box(1.05, 0.05, 0.55, M.deskTop, X_LBACK + 0.5, 0.92, zc)
         box(0.2, 0.3, 0.2, M.dark, X_LBACK + 0.5, 1.1, zc + 0.15) // máquina de café
-        plant(X_LBACK + 0.5, zc - 1.2, 1.05)
+        if (!placeModel(GLB.monstera, X_LBACK + 0.5, zc - 1.2, 1.2, 0, -0.4)) plant(X_LBACK + 0.5, zc - 1.2, 1.05)
       }
       // recepción punto de proximidad
       proxPoints.push({ s: STATIONS.find((x) => x.id === 'recepcion'), x: -1.2, z: HALL_Z0 + 3.0 })
