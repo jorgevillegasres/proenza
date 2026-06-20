@@ -90,7 +90,7 @@
       renderer.toneMappingExposure = 0.82
 
       const scene = new THREE.Scene()
-      scene.background = new THREE.Color(0xcdd6df)
+      scene.background = new THREE.Color(0xf1eadd)
       const camera = new THREE.PerspectiveCamera(70, innerWidth / innerHeight, 0.05, 300)
 
       // IBL desde el panorama de oficina
@@ -106,18 +106,25 @@
         })
       }
 
-      const mat = (c, o = {}) => new THREE.MeshStandardMaterial({ color: c, envMapIntensity: 1.0, ...o })
+      // Rampa toon (cel-shading) escalonada → estilo ilustrado, no realista.
+      const gradTex = (() => {
+        const c = document.createElement('canvas'); c.width = 4; c.height = 1; const g = c.getContext('2d')
+        ;['#6f6f6f', '#9e9e9e', '#cccccc', '#ffffff'].forEach((col, i) => { g.fillStyle = col; g.fillRect(i, 0, 1, 1) })
+        const t = new THREE.CanvasTexture(c); t.minFilter = THREE.NearestFilter; t.magFilter = THREE.NearestFilter; return t
+      })()
+      // mat(): material toon cálido; ignora props PBR (roughness/metalness/env).
+      const mat = (c, o = {}) => { const { roughness, metalness, envMapIntensity, ...rest } = o; void roughness; void metalness; void envMapIntensity; return new THREE.MeshToonMaterial({ color: c, gradientMap: gradTex, ...rest }) }
       const M = {
-        floor: mat(0xb4bac0, { roughness: 0.14, metalness: 0.0, envMapIntensity: 1.4 }),
-        wall: mat(0xeae8e3, { roughness: 0.9 }),
-        ceil: mat(0xe4e3df, { roughness: 1 }),
-        wood: mat(0x4a2f1d, { roughness: 0.4, metalness: 0.1, envMapIntensity: 1.1 }),
-        deskTop: mat(0x2a1c12, { roughness: 0.28, envMapIntensity: 1.2 }),
-        glass: new THREE.MeshStandardMaterial({ color: 0xcfe0ec, roughness: 0.04, metalness: 0.0, transparent: true, opacity: 0.13, envMapIntensity: 1.6 }),
-        frame: mat(0x23272d, { roughness: 0.45, metalness: 0.7, envMapIntensity: 1.3 }),
-        dark: mat(0x14171b, { roughness: 0.45, metalness: 0.2 }),
-        line: new THREE.MeshStandardMaterial({ color: 0xeaf6ff, emissive: 0x9fd4ff, emissiveIntensity: 2.2 }),
-        lamp: new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xfff0d8, emissiveIntensity: 3 }),
+        floor: mat(0xd2c9b8),   // piso cálido claro
+        wall: mat(0xf2ede2),    // crema
+        ceil: mat(0xf7f3eb),
+        wood: mat(0x8a5a36),    // madera cálida
+        deskTop: mat(0x6e4326),
+        glass: new THREE.MeshBasicMaterial({ color: 0xdce8ee, transparent: true, opacity: 0.12 }),
+        frame: mat(0x3b4250),   // marcos azul-grisáceo
+        dark: mat(0x2a2f37),
+        line: new THREE.MeshBasicMaterial({ color: 0xcdebff }),  // guías de piso (glow con bloom)
+        lamp: new THREE.MeshBasicMaterial({ color: 0xfff3df }),
       }
 
       // --- texturas procedurales (rompen el color plano) ---------------------
@@ -134,9 +141,9 @@
         g.fillStyle = base; g.fillRect(0, 0, s, s); g.globalAlpha = 0.18; g.strokeStyle = dark
         for (let x = 0; x < s; x += 3) { g.lineWidth = 0.5 + Math.random() * 1.6; g.beginPath(); g.moveTo(x + (Math.random() - 0.5) * 4, 0); g.bezierCurveTo(x + 8, s * 0.33, x - 8, s * 0.66, x + (Math.random() - 0.5) * 4, s); g.stroke() }
       })
-      M.floor.map = marbleTex('#b4bac0', '#7f868d'); M.floor.map.repeat.set(6, 6)
-      M.wood.map = woodTex('#4a2f1d', '#2c1a0e'); M.wood.map.repeat.set(2, 2)
-      M.deskTop.map = woodTex('#2a1c12', '#150d07'); M.deskTop.map.repeat.set(2, 2)
+      void marbleTex // piso plano cálido (estilo ilustrado, sin veteado realista)
+      M.wood.map = woodTex('#8a5a36', '#5e3a20'); M.wood.map.repeat.set(2, 2)
+      M.deskTop.map = woodTex('#6e4326', '#472a16'); M.deskTop.map.repeat.set(2, 2)
 
       const HALL_Z0 = -9.2, HALL_Z1 = 11, H = 3.3, X_L = -2.2, X_R = 2.2, X_LBACK = -7.5
       const grp = new THREE.Group(); scene.add(grp)
@@ -149,7 +156,22 @@
         }
         return new THREE.BoxGeometry(w, h, d)
       }
-      const box = (w, h, d, material, x, y, z, ry = 0) => { const m = new THREE.Mesh(geom(w, h, d), material); m.position.set(x, y, z); m.rotation.y = ry; return addM(m) }
+      // Contorno tipo ilustración (casco invertido): un duplicado oscuro algo mayor.
+      const outlineMat = new THREE.MeshBasicMaterial({ color: 0x35322e, side: THREE.BackSide })
+      const addOutline = (mesh, parent = grp, t = 0.024) => {
+        const g2 = mesh.geometry; g2.computeBoundingBox()
+        const bb = g2.boundingBox, sw = bb.max.x - bb.min.x, sh = bb.max.y - bb.min.y, sd = bb.max.z - bb.min.z
+        const o = new THREE.Mesh(g2, outlineMat)
+        o.position.copy(mesh.position); o.rotation.copy(mesh.rotation)
+        o.scale.set(mesh.scale.x * (1 + t / Math.max(0.06, sw)), mesh.scale.y * (1 + t / Math.max(0.06, sh)), mesh.scale.z * (1 + t / Math.max(0.06, sd)))
+        o.castShadow = false; o.receiveShadow = false; parent.add(o); return o
+      }
+      const noOutline = new Set([M.glass, M.line, M.lamp])
+      const box = (w, h, d, material, x, y, z, ry = 0) => {
+        const m = new THREE.Mesh(geom(w, h, d), material); m.position.set(x, y, z); m.rotation.y = ry; addM(m)
+        if (Math.min(w, h, d) > 0.14 && !noOutline.has(material)) addOutline(m)
+        return m
+      }
       const planeM = (w, h, material, x, y, z, rx = 0, ry = 0) => { const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), material); m.position.set(x, y, z); m.rotation.set(rx, ry, 0); return addM(m, false, true) }
       const cyl = (rt, rb, h, material, x, y, z, seg = 18) => { const m = new THREE.Mesh(new THREE.CylinderGeometry(rt, rb, h, seg), material); m.position.set(x, y, z); return addM(m) }
       // Silla de oficina (asiento + respaldo redondeados, poste y base de patas).
@@ -178,12 +200,12 @@
       // Planta en maceta (follaje con varios blobs suaves).
       const plant = (x, z, s = 1) => {
         const g = new THREE.Group()
-        g.add(new THREE.Mesh(new THREE.CylinderGeometry(0.2 * s, 0.15 * s, 0.36 * s, 18), mat(0x2a2d31, { roughness: 0.6 })).translateY(0.18 * s))
-        const leaf = mat(0x356b3f, { roughness: 0.85 })
+        const pot = new THREE.Mesh(new THREE.CylinderGeometry(0.2 * s, 0.15 * s, 0.36 * s, 20), mat(0x9c5a3c)); pot.position.y = 0.18 * s; g.add(pot); addOutline(pot, g, 0.03)
+        const leaf = mat(0x4a8a4f)
         const blobs = [[0, 0.58, 0, 0.34], [0.18, 0.74, 0.05, 0.25], [-0.15, 0.76, -0.06, 0.23], [0.05, 0.92, 0.02, 0.21], [-0.06, 0.66, 0.17, 0.2]]
-        for (const [bx, by, bz, br] of blobs) { const mm = new THREE.Mesh(new THREE.IcosahedronGeometry(br * s, 2), leaf); mm.position.set(bx * s, by * s, bz * s); mm.scale.y = 1.2; g.add(mm) }
+        for (const [bx, by, bz, br] of blobs) { const mm = new THREE.Mesh(new THREE.SphereGeometry(br * s, 18, 14), leaf); mm.position.set(bx * s, by * s, bz * s); mm.scale.y = 1.2; g.add(mm); addOutline(mm, g, 0.03) }
         g.position.set(x, 0, z)
-        g.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true } })
+        g.traverse((o) => { if (o.isMesh && o.material !== outlineMat) { o.castShadow = true; o.receiveShadow = true } })
         grp.add(g); return g
       }
 
@@ -201,9 +223,23 @@
       box(X_R - X_LBACK, 0.12, 0.05, M.dark, (X_R + X_LBACK) / 2, 0.06, HALL_Z0 + 0.05)
       box(X_R - X_LBACK, 0.12, 0.05, M.dark, (X_R + X_LBACK) / 2, 0.06, HALL_Z1 - 0.05)
 
-      // --- ventanal derecho con la ciudad ------------------------------------
-      const cityMat = new THREE.MeshBasicMaterial({ color: 0xbcd3e6 })
-      if (cityUrl) { const t = new THREE.TextureLoader().load(cityUrl); t.colorSpace = THREE.SRGBColorSpace; t.wrapS = THREE.RepeatWrapping; t.repeat.x = 2.5; cityMat.map = t }
+      // --- ventanal derecho: cielo ilustrado (gradiente cálido + skyline) ----
+      void cityUrl
+      const skyTex = mkTex((g, s) => {
+        const grad = g.createLinearGradient(0, 0, 0, s)
+        grad.addColorStop(0, '#bcd8ea'); grad.addColorStop(0.5, '#e6eef0'); grad.addColorStop(1, '#f7e9d6')
+        g.fillStyle = grad; g.fillRect(0, 0, s, s)
+        // skyline (dos capas de siluetas, tonos fríos hacia la base)
+        const layer = (alpha, color, baseY, minH, maxH, minW, maxW, gap) => {
+          g.fillStyle = color; g.globalAlpha = alpha; let x = -10
+          while (x < s + 10) { const w = minW + Math.random() * (maxW - minW), h = minH + Math.random() * (maxH - minH); g.fillRect(x, baseY - h, w, h); x += w + gap }
+        }
+        layer(0.35, '#9fb2c4', s * 0.92, 30, 120, 16, 40, 8)
+        layer(0.55, '#7d93a9', s * 1.0, 50, 170, 24, 56, 10)
+        g.globalAlpha = 1
+      })
+      skyTex.repeat.set(3, 1)
+      const cityMat = new THREE.MeshBasicMaterial({ map: skyTex })
       planeM(totalZ * 2.4, H * 1.7, cityMat, X_R + 3, H / 2 + 0.2, midZ, 0, -Math.PI / 2)
       planeM(totalZ, H, M.glass, X_R - 0.02, H / 2, midZ, 0, -Math.PI / 2)
       for (let z = HALL_Z0; z <= HALL_Z1; z += 2.2) box(0.07, H, 0.07, M.frame, X_R - 0.03, H / 2, z)
@@ -221,11 +257,13 @@
       box(0.08, 0.05, totalZ, cove, X_R - 0.16, H - 0.13, midZ)
       box(X_R - X_LBACK, 0.05, 0.08, cove, (X_R + X_LBACK) / 2, H - 0.13, HALL_Z0 + 0.22)
       box(X_R - X_LBACK, 0.05, 0.08, cove, (X_R + X_LBACK) / 2, H - 0.13, HALL_Z1 - 0.22)
-      const day = new THREE.DirectionalLight(0xfff6e8, 1.95); day.position.set(20, 12, 6); day.castShadow = true
+      const day = new THREE.DirectionalLight(0xfff0d6, 1.05); day.position.set(14, 16, 8); day.castShadow = true
       day.shadow.mapSize.set(2048, 2048); day.shadow.camera.near = 1; day.shadow.camera.far = 80
-      Object.assign(day.shadow.camera, { left: -16, right: 16, top: 14, bottom: -14 }); day.shadow.bias = -0.0005
+      Object.assign(day.shadow.camera, { left: -16, right: 16, top: 14, bottom: -14 }); day.shadow.bias = -0.0005; day.shadow.radius = 5
       grp.add(day, day.target)
-      grp.add(new THREE.AmbientLight(0xffffff, 0.06))
+      // luz hemisférica cálida → sombreado plano y parejo (ilustrado)
+      grp.add(new THREE.HemisphereLight(0xfff4e6, 0xcdbfa6, 1.05))
+      grp.add(new THREE.AmbientLight(0xffffff, 0.25))
 
       // --- letrero de canvas reutilizable ------------------------------------
       const textSign = (line1, line2, w, h, em = 0xffe9c0) => {
