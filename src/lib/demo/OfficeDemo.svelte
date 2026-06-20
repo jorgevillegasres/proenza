@@ -90,7 +90,7 @@
       renderer.toneMappingExposure = 0.82
 
       const scene = new THREE.Scene()
-      scene.background = new THREE.Color(0xf1eadd)
+      scene.background = new THREE.Color(0xe6e8e9)
       const camera = new THREE.PerspectiveCamera(70, innerWidth / innerHeight, 0.05, 300)
 
       // IBL desde el panorama de oficina
@@ -106,25 +106,20 @@
         })
       }
 
-      // Rampa toon (cel-shading) escalonada → estilo ilustrado, no realista.
-      const gradTex = (() => {
-        const c = document.createElement('canvas'); c.width = 4; c.height = 1; const g = c.getContext('2d')
-        ;['#6f6f6f', '#9e9e9e', '#cccccc', '#ffffff'].forEach((col, i) => { g.fillStyle = col; g.fillRect(i, 0, 1, 1) })
-        const t = new THREE.CanvasTexture(c); t.minFilter = THREE.NearestFilter; t.magFilter = THREE.NearestFilter; return t
-      })()
-      // mat(): material toon cálido; ignora props PBR (roughness/metalness/env).
-      const mat = (c, o = {}) => { const { roughness, metalness, envMapIntensity, ...rest } = o; void roughness; void metalness; void envMapIntensity; return new THREE.MeshToonMaterial({ color: c, gradientMap: gradTex, ...rest }) }
+      // Materiales PBR (premium): roughness/metalness reales + reflejos del entorno.
+      const mat = (c, o = {}) => new THREE.MeshStandardMaterial({ color: c, envMapIntensity: 1.0, ...o })
       const M = {
-        floor: mat(0xd2c9b8),   // piso cálido claro
-        wall: mat(0xf2ede2),    // crema
-        ceil: mat(0xf7f3eb),
-        wood: mat(0x8a5a36),    // madera cálida
-        deskTop: mat(0x6e4326),
-        glass: new THREE.MeshBasicMaterial({ color: 0xdce8ee, transparent: true, opacity: 0.12 }),
-        frame: mat(0x3b4250),   // marcos azul-grisáceo
-        dark: mat(0x2a2f37),
-        line: new THREE.MeshBasicMaterial({ color: 0xcdebff }),  // guías de piso (glow con bloom)
-        lamp: new THREE.MeshBasicMaterial({ color: 0xfff3df }),
+        floor: mat(0xc9c2b4, { roughness: 0.13, metalness: 0.0, envMapIntensity: 1.7 }), // concreto/madera pulida reflectante
+        wall: mat(0xeae6dd, { roughness: 0.95 }),
+        ceil: mat(0xf2efe8, { roughness: 1 }),
+        wood: mat(0x6b4a32, { roughness: 0.4, metalness: 0.05, envMapIntensity: 1.0 }),  // madera cálida realista
+        deskTop: mat(0x4a3322, { roughness: 0.3, envMapIntensity: 1.1 }),
+        glass: new THREE.MeshStandardMaterial({ color: 0xeaf2f5, roughness: 0.04, metalness: 0.0, transparent: true, opacity: 0.16, envMapIntensity: 1.9 }),
+        frosted: new THREE.MeshStandardMaterial({ color: 0xdde7eb, roughness: 0.92, transparent: true, opacity: 0.55, side: THREE.DoubleSide }), // vidrio esmerilado
+        frame: mat(0x2a2f36, { roughness: 0.4, metalness: 0.8, envMapIntensity: 1.4 }),
+        dark: mat(0x1b1f24, { roughness: 0.5, metalness: 0.2 }),
+        line: new THREE.MeshStandardMaterial({ color: 0xeaf6ff, emissive: 0x9fd4ff, emissiveIntensity: 2.2 }),
+        lamp: new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xfff0d8, emissiveIntensity: 3 }),
       }
 
       // --- texturas procedurales (rompen el color plano) ---------------------
@@ -141,9 +136,9 @@
         g.fillStyle = base; g.fillRect(0, 0, s, s); g.globalAlpha = 0.18; g.strokeStyle = dark
         for (let x = 0; x < s; x += 3) { g.lineWidth = 0.5 + Math.random() * 1.6; g.beginPath(); g.moveTo(x + (Math.random() - 0.5) * 4, 0); g.bezierCurveTo(x + 8, s * 0.33, x - 8, s * 0.66, x + (Math.random() - 0.5) * 4, s); g.stroke() }
       })
-      void marbleTex // piso plano cálido (estilo ilustrado, sin veteado realista)
-      M.wood.map = woodTex('#8a5a36', '#5e3a20'); M.wood.map.repeat.set(2, 2)
-      M.deskTop.map = woodTex('#6e4326', '#472a16'); M.deskTop.map.repeat.set(2, 2)
+      M.floor.map = marbleTex('#c9c2b4', '#ada592'); M.floor.map.repeat.set(5, 5) // concreto pulido sutil
+      M.wood.map = woodTex('#6b4a32', '#3f2a18'); M.wood.map.repeat.set(2, 2)
+      M.deskTop.map = woodTex('#4a3322', '#2a1c12'); M.deskTop.map.repeat.set(2, 2)
 
       const HALL_Z0 = -9.2, HALL_Z1 = 11, H = 3.3, X_L = -2.2, X_R = 2.2, X_LBACK = -7.5
       const grp = new THREE.Group(); scene.add(grp)
@@ -156,22 +151,7 @@
         }
         return new THREE.BoxGeometry(w, h, d)
       }
-      // Contorno tipo ilustración (casco invertido): un duplicado oscuro algo mayor.
-      const outlineMat = new THREE.MeshBasicMaterial({ color: 0x35322e, side: THREE.BackSide })
-      const addOutline = (mesh, parent = grp, t = 0.024) => {
-        const g2 = mesh.geometry; g2.computeBoundingBox()
-        const bb = g2.boundingBox, sw = bb.max.x - bb.min.x, sh = bb.max.y - bb.min.y, sd = bb.max.z - bb.min.z
-        const o = new THREE.Mesh(g2, outlineMat)
-        o.position.copy(mesh.position); o.rotation.copy(mesh.rotation)
-        o.scale.set(mesh.scale.x * (1 + t / Math.max(0.06, sw)), mesh.scale.y * (1 + t / Math.max(0.06, sh)), mesh.scale.z * (1 + t / Math.max(0.06, sd)))
-        o.castShadow = false; o.receiveShadow = false; parent.add(o); return o
-      }
-      const noOutline = new Set([M.glass, M.line, M.lamp])
-      const box = (w, h, d, material, x, y, z, ry = 0) => {
-        const m = new THREE.Mesh(geom(w, h, d), material); m.position.set(x, y, z); m.rotation.y = ry; addM(m)
-        if (Math.min(w, h, d) > 0.14 && !noOutline.has(material)) addOutline(m)
-        return m
-      }
+      const box = (w, h, d, material, x, y, z, ry = 0) => { const m = new THREE.Mesh(geom(w, h, d), material); m.position.set(x, y, z); m.rotation.y = ry; return addM(m) }
       const planeM = (w, h, material, x, y, z, rx = 0, ry = 0) => { const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), material); m.position.set(x, y, z); m.rotation.set(rx, ry, 0); return addM(m, false, true) }
       const cyl = (rt, rb, h, material, x, y, z, seg = 18) => { const m = new THREE.Mesh(new THREE.CylinderGeometry(rt, rb, h, seg), material); m.position.set(x, y, z); return addM(m) }
       // Silla de oficina (asiento + respaldo redondeados, poste y base de patas).
@@ -200,12 +180,12 @@
       // Planta en maceta (follaje con varios blobs suaves).
       const plant = (x, z, s = 1) => {
         const g = new THREE.Group()
-        const pot = new THREE.Mesh(new THREE.CylinderGeometry(0.2 * s, 0.15 * s, 0.36 * s, 20), mat(0x9c5a3c)); pot.position.y = 0.18 * s; g.add(pot); addOutline(pot, g, 0.03)
-        const leaf = mat(0x4a8a4f)
-        const blobs = [[0, 0.58, 0, 0.34], [0.18, 0.74, 0.05, 0.25], [-0.15, 0.76, -0.06, 0.23], [0.05, 0.92, 0.02, 0.21], [-0.06, 0.66, 0.17, 0.2]]
-        for (const [bx, by, bz, br] of blobs) { const mm = new THREE.Mesh(new THREE.SphereGeometry(br * s, 18, 14), leaf); mm.position.set(bx * s, by * s, bz * s); mm.scale.y = 1.2; g.add(mm); addOutline(mm, g, 0.03) }
+        const pot = new THREE.Mesh(new THREE.CylinderGeometry(0.19 * s, 0.16 * s, 0.4 * s, 24), mat(0x2c2f33, { roughness: 0.5, metalness: 0.1 })); pot.position.y = 0.2 * s; g.add(pot) // maceta moderna mate
+        const leaf = mat(0x2f6e3a, { roughness: 0.6 })
+        const blobs = [[0, 0.62, 0, 0.36], [0.2, 0.78, 0.05, 0.27], [-0.17, 0.8, -0.06, 0.25], [0.05, 0.98, 0.02, 0.23], [-0.06, 0.7, 0.19, 0.22], [0.16, 0.62, -0.16, 0.2]]
+        for (const [bx, by, bz, br] of blobs) { const mm = new THREE.Mesh(new THREE.SphereGeometry(br * s, 20, 16), leaf); mm.position.set(bx * s, by * s, bz * s); mm.scale.set(1, 1.25, 1); g.add(mm) }
         g.position.set(x, 0, z)
-        g.traverse((o) => { if (o.isMesh && o.material !== outlineMat) { o.castShadow = true; o.receiveShadow = true } })
+        g.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true } })
         grp.add(g); return g
       }
 
@@ -223,23 +203,23 @@
       box(X_R - X_LBACK, 0.12, 0.05, M.dark, (X_R + X_LBACK) / 2, 0.06, HALL_Z0 + 0.05)
       box(X_R - X_LBACK, 0.12, 0.05, M.dark, (X_R + X_LBACK) / 2, 0.06, HALL_Z1 - 0.05)
 
-      // --- ventanal derecho: cielo ilustrado (gradiente cálido + skyline) ----
-      void cityUrl
-      const skyTex = mkTex((g, s) => {
-        const grad = g.createLinearGradient(0, 0, 0, s)
-        grad.addColorStop(0, '#bcd8ea'); grad.addColorStop(0.5, '#e6eef0'); grad.addColorStop(1, '#f7e9d6')
-        g.fillStyle = grad; g.fillRect(0, 0, s, s)
-        // skyline (dos capas de siluetas, tonos fríos hacia la base)
-        const layer = (alpha, color, baseY, minH, maxH, minW, maxW, gap) => {
-          g.fillStyle = color; g.globalAlpha = alpha; let x = -10
-          while (x < s + 10) { const w = minW + Math.random() * (maxW - minW), h = minH + Math.random() * (maxH - minH); g.fillRect(x, baseY - h, w, h); x += w + gap }
-        }
-        layer(0.35, '#9fb2c4', s * 0.92, 30, 120, 16, 40, 8)
-        layer(0.55, '#7d93a9', s * 1.0, 50, 170, 24, 56, 10)
-        g.globalAlpha = 1
-      })
-      skyTex.repeat.set(3, 1)
-      const cityMat = new THREE.MeshBasicMaterial({ map: skyTex })
+      // --- ventanal derecho con la ciudad (vista real; skyline ilustrado de respaldo)
+      const cityMat = new THREE.MeshBasicMaterial({ color: 0xbcd3e6 })
+      if (cityUrl) {
+        const t = new THREE.TextureLoader().load(cityUrl); t.colorSpace = THREE.SRGBColorSpace; t.wrapS = THREE.RepeatWrapping; t.repeat.x = 2.5; cityMat.map = t
+      } else {
+        const skyTex = mkTex((g, s) => {
+          const grad = g.createLinearGradient(0, 0, 0, s)
+          grad.addColorStop(0, '#bcd8ea'); grad.addColorStop(0.5, '#e6eef0'); grad.addColorStop(1, '#f7e9d6')
+          g.fillStyle = grad; g.fillRect(0, 0, s, s)
+          const layer = (alpha, color, baseY, minH, maxH, minW, maxW, gap) => {
+            g.fillStyle = color; g.globalAlpha = alpha; let x = -10
+            while (x < s + 10) { const w = minW + Math.random() * (maxW - minW), h = minH + Math.random() * (maxH - minH); g.fillRect(x, baseY - h, w, h); x += w + gap }
+          }
+          layer(0.35, '#9fb2c4', s * 0.92, 30, 120, 16, 40, 8); layer(0.55, '#7d93a9', s * 1.0, 50, 170, 24, 56, 10); g.globalAlpha = 1
+        })
+        skyTex.repeat.set(3, 1); cityMat.map = skyTex
+      }
       planeM(totalZ * 2.4, H * 1.7, cityMat, X_R + 3, H / 2 + 0.2, midZ, 0, -Math.PI / 2)
       planeM(totalZ, H, M.glass, X_R - 0.02, H / 2, midZ, 0, -Math.PI / 2)
       for (let z = HALL_Z0; z <= HALL_Z1; z += 2.2) box(0.07, H, 0.07, M.frame, X_R - 0.03, H / 2, z)
@@ -257,13 +237,13 @@
       box(0.08, 0.05, totalZ, cove, X_R - 0.16, H - 0.13, midZ)
       box(X_R - X_LBACK, 0.05, 0.08, cove, (X_R + X_LBACK) / 2, H - 0.13, HALL_Z0 + 0.22)
       box(X_R - X_LBACK, 0.05, 0.08, cove, (X_R + X_LBACK) / 2, H - 0.13, HALL_Z1 - 0.22)
-      const day = new THREE.DirectionalLight(0xfff0d6, 1.05); day.position.set(14, 16, 8); day.castShadow = true
+      const day = new THREE.DirectionalLight(0xfff2dc, 1.45); day.position.set(14, 16, 8); day.castShadow = true
       day.shadow.mapSize.set(2048, 2048); day.shadow.camera.near = 1; day.shadow.camera.far = 80
-      Object.assign(day.shadow.camera, { left: -16, right: 16, top: 14, bottom: -14 }); day.shadow.bias = -0.0005; day.shadow.radius = 5
+      Object.assign(day.shadow.camera, { left: -16, right: 16, top: 14, bottom: -14 }); day.shadow.bias = -0.0005; day.shadow.radius = 6
       grp.add(day, day.target)
-      // luz hemisférica cálida → sombreado plano y parejo (ilustrado)
-      grp.add(new THREE.HemisphereLight(0xfff4e6, 0xcdbfa6, 1.05))
-      grp.add(new THREE.AmbientLight(0xffffff, 0.25))
+      // relleno sutil (la oclusión ambiental GTAO aporta la profundidad)
+      grp.add(new THREE.HemisphereLight(0xfff4e6, 0xc8bca4, 0.35))
+      grp.add(new THREE.AmbientLight(0xffffff, 0.08))
 
       // --- letrero de canvas reutilizable ------------------------------------
       const textSign = (line1, line2, w, h, em = 0xffe9c0) => {
@@ -275,6 +255,17 @@
         const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace
         const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshStandardMaterial({ map: tex, emissive: em, emissiveMap: tex, emissiveIntensity: 1.5, transparent: true }))
         return m
+      }
+      // Vinilo esmerilado: banda de cristal con el nombre grabado (señalética integrada).
+      const etchedSign = (line1, line2, w, h) => {
+        const c = document.createElement('canvas'); c.width = 2048; c.height = 320; const g = c.getContext('2d')
+        g.fillStyle = 'rgba(222,231,235,0.72)'; g.fillRect(0, 0, 2048, 320)
+        g.fillStyle = 'rgba(255,255,255,0.45)'; g.fillRect(0, 0, 2048, 7); g.fillRect(0, 313, 2048, 7)
+        g.textAlign = 'left'; g.textBaseline = 'middle'
+        g.fillStyle = '#1d2733'; g.font = '700 118px Georgia, serif'; g.fillText(line1, 80, line2 ? 130 : 160)
+        if (line2) { g.fillStyle = '#586572'; g.font = '400 58px Arial, sans-serif'; g.fillText(line2, 84, 235) }
+        const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace
+        return new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshStandardMaterial({ map: tex, transparent: true, roughness: 0.85, side: THREE.DoubleSide }))
       }
       // Letrero a partir de una imagen (el logo) — retroiluminado.
       const imgSign = (url, w, h) => {
@@ -300,10 +291,13 @@
       const proxPoints = []
       for (const s of STATIONS.filter((x) => x.type === 'office')) {
         const zc = s.z, hd = 1.55
-        // particiones laterales + fondo + frente de vidrio
-        box(X_L - X_LBACK, H, 0.08, M.wall, (X_L + X_LBACK) / 2, H / 2, zc - hd)
-        box(X_L - X_LBACK, H, 0.08, M.wall, (X_L + X_LBACK) / 2, H / 2, zc + hd)
-        planeM(2 * hd, H, M.glass, X_L, H / 2, zc, 0, Math.PI / 2) // vidrio al pasillo
+        // particiones laterales de vidrio esmerilado (premium, abre el pasillo)
+        for (const dz of [-hd, hd]) {
+          box(X_L - X_LBACK, 0.5, 0.06, M.dark, (X_L + X_LBACK) / 2, 0.25, zc + dz)                            // base opaca
+          planeM(X_L - X_LBACK, H - 0.55, M.frosted, (X_L + X_LBACK) / 2, 0.5 + (H - 0.55) / 2, zc + dz, 0, 0)  // cristal esmerilado
+          box(X_L - X_LBACK, 0.06, 0.06, M.frame, (X_L + X_LBACK) / 2, H - 0.03, zc + dz)                       // riel superior
+        }
+        planeM(2 * hd, H, M.glass, X_L, H / 2, zc, 0, Math.PI / 2) // frente de vidrio claro al pasillo
         box(0.06, H, 0.06, M.frame, X_L, H / 2, zc - hd)
         box(0.06, H, 0.06, M.frame, X_L, H / 2, zc + hd)
         // escritorio + silla dentro
@@ -315,10 +309,9 @@
         box(0.14, 0.16, 0.1, M.dark, X_L - 2.3, 1.0, zc)
         plant(X_LBACK + 0.55, zc + 1.05, 0.92)
         box(0.45, 0.6, 0.04, mat(0xc6a05a, { metalness: 0.25, roughness: 0.4 }), X_LBACK + 0.05, 1.75, zc - 0.7, Math.PI / 2)
-        // letrero colgante con el nombre
-        const sign = textSign(s.label.toUpperCase(), s.sub, 2.4, 0.62, 0x8fd0ff)
-        sign.position.set(X_L + 0.04, 2.25, zc); sign.rotation.y = Math.PI / 2; grp.add(sign)
-        const bar = box(0.02, 0.5, 0.02, M.frame, X_L + 0.04, 2.7, zc); void bar
+        // nombre en vinilo esmerilado sobre el cristal del frente (señalética integrada)
+        const band = etchedSign(s.label, s.sub, 2.5, 0.62)
+        band.position.set(X_L + 0.03, 1.5, zc); band.rotation.y = Math.PI / 2; grp.add(band)
         proxPoints.push({ s, x: X_L + 0.9, z: zc })
       }
 
@@ -346,10 +339,9 @@
         cyl(0.025, 0.032, 1.5, M.frame, X_LBACK + 0.7, 0.75, zc + hd - 0.3, 12)
         cyl(0.13, 0.16, 0.06, M.frame, X_LBACK + 0.7, 0.04, zc + hd - 0.3, 18) // base
         const shade = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.26, 0.3, 24, 1, true), M.lamp); shade.position.set(X_LBACK + 0.7, 1.62, zc + hd - 0.3); addM(shade)
-        // letrero colgante
-        const sign = textSign('BIBLIOTECA', 'Blog jurídico', 2.3, 0.6, 0x8fd0ff)
-        sign.position.set(X_L + 0.04, 2.25, zc); sign.rotation.y = Math.PI / 2; grp.add(sign)
-        box(0.02, 0.5, 0.02, M.frame, X_L + 0.04, 2.7, zc)
+        // nombre en vinilo esmerilado sobre el cristal
+        const band = etchedSign('Biblioteca', 'Blog jurídico', 2.4, 0.6)
+        band.position.set(X_L + 0.03, 1.5, zc); band.rotation.y = Math.PI / 2; grp.add(band)
         proxPoints.push({ s: STATIONS.find((x) => x.id === 'biblioteca'), x: X_L + 0.9, z: zc })
       }
 
@@ -396,12 +388,13 @@
       egg2.add(new THREE.Mesh(new THREE.ConeGeometry(0.04, 0.08, 4), mat(0x33312f)).translateY(0.12).translateX(-0.05))
       egg2.add(new THREE.Mesh(new THREE.ConeGeometry(0.04, 0.08, 4), mat(0x33312f)).translateY(0.12).translateX(0.05))
       egg2.position.set(-2.6, 0.12, HALL_Z0 + 1.0); egg2.userData.egg = '🐱 Encontraste a "Habeas", el gato del despacho.'; grp.add(egg2)
-      // 3) Pato de goma en el mostrador
+      // 3) Campana de recepción en latón (detalle elegante, antes era el pato)
       const egg3 = new THREE.Group()
-      egg3.add(new THREE.Mesh(new THREE.SphereGeometry(0.1, 12, 12), mat(0xf4c430)))
-      egg3.add(new THREE.Mesh(new THREE.SphereGeometry(0.06, 10, 10), mat(0xf4c430)).translateY(0.1).translateZ(0.05))
-      egg3.add(new THREE.Mesh(new THREE.ConeGeometry(0.03, 0.07, 8), mat(0xe8732a)).translateY(0.1).translateZ(0.13).rotateX(Math.PI / 2))
-      egg3.position.set(-0.2, 1.18, HALL_Z0 + 1.5); egg3.userData.egg = '🦆 El pato de goma — el verdadero socio principal del despacho.'; grp.add(egg3)
+      const brass = mat(0xc69a3a, { metalness: 0.85, roughness: 0.28, envMapIntensity: 1.4 })
+      egg3.add(new THREE.Mesh(new THREE.SphereGeometry(0.1, 24, 16, 0, Math.PI * 2, 0, Math.PI / 2), brass))
+      egg3.add(new THREE.Mesh(new THREE.CylinderGeometry(0.105, 0.115, 0.025, 24), brass))
+      egg3.add(new THREE.Mesh(new THREE.SphereGeometry(0.022, 12, 12), brass).translateY(0.108))
+      egg3.position.set(-0.2, 1.14, HALL_Z0 + 1.5); egg3.userData.egg = '🔔 Campana de recepción. En Proenza basta con escribirnos — sin filas, sin timbres.'; grp.add(egg3)
       // 4º: un libro escondido en la mesa de la biblioteca
       const egg4 = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.05, 0.16), mat(0x8a1f2b))
       egg4.position.set(X_LBACK + 2.7, 0.71, 9.4); egg4.userData.egg = '📖 "Código Civil anotado" — con un billete de lotería de marcapáginas. 🍀'; grp.add(egg4)
@@ -449,7 +442,16 @@
         const lowEnd = matchMedia('(pointer: coarse)').matches || innerWidth < 820
         const rt = new THREE.WebGLRenderTarget(innerWidth, innerHeight, { samples: lowEnd ? 2 : 4 })
         composer = new EffectComposer(renderer, rt); composer.addPass(new RenderPass(scene, camera))
-        composer.addPass(new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.32, 0.6, 0.85)); composer.addPass(new OutputPass())
+        // oclusión ambiental GTAO → profundidad y sombras de contacto (lo más impactante)
+        if (!lowEnd) {
+          try {
+            const { GTAOPass } = await import('three/examples/jsm/postprocessing/GTAOPass.js')
+            const gtao = new GTAOPass(scene, camera, innerWidth, innerHeight)
+            try { gtao.updateGtaoMaterial({ radius: 0.45, scale: 1.1, samples: 16 }) } catch { /* defaults */ }
+            composer.addPass(gtao)
+          } catch { /* sin GTAO */ }
+        }
+        composer.addPass(new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.28, 0.6, 0.85)); composer.addPass(new OutputPass())
       } catch { composer = null }
       addEventListener('resize', resize); resize()
 
@@ -628,16 +630,17 @@
   .social { display: flex; gap: 0.35rem; }
   .social a { width: 28px; height: 28px; display: grid; place-items: center; border-radius: 50%; background: rgba(255,255,255,0.18); backdrop-filter: blur(8px); color: #fff; font-size: 0.62rem; font-weight: 700; text-shadow: 0 1px 3px rgba(0,0,0,0.4); }
   .social a:hover { background: rgba(255,255,255,0.35); }
-  .explore { position: absolute; top: 50%; right: 4vw; transform: translateY(-50%); width: 270px; background: rgba(20,28,38,0.32); backdrop-filter: blur(14px); border: 1px solid rgba(255,255,255,0.28); border-radius: 16px; padding: 1.3rem; color: #fff; text-shadow: 0 1px 4px rgba(0,0,0,0.5); box-shadow: 0 18px 50px rgba(0,0,0,0.3); }
+  .explore { position: absolute; top: 50%; right: 4vw; transform: translateY(-50%); width: 270px; background: rgba(16,24,34,0.18); backdrop-filter: blur(26px) saturate(1.3); -webkit-backdrop-filter: blur(26px) saturate(1.3); border: 1px solid rgba(255,255,255,0.14); border-radius: 20px; padding: 1.3rem; color: #fff; text-shadow: 0 1px 5px rgba(0,0,0,0.55); box-shadow: 0 24px 60px rgba(0,0,0,0.32), inset 0 1px 0 rgba(255,255,255,0.22); }
   .explore h2 { font-size: 1rem; margin: 0 0 0.8rem; }
   .explore .poi { font-size: 0.78rem; opacity: 0.85; margin: 0 0 0.4rem; }
   .explore ul { list-style: none; margin: 0 0 0.8rem; padding: 0; display: grid; gap: 0.3rem; font-size: 0.84rem; }
   .explore li.done { color: #9fe6c0; }
   .explore .next { font-size: 0.8rem; margin: 0 0 0.9rem; }
-  .cta { display: block; width: 100%; text-align: center; padding: 0.7rem; border: 1px solid rgba(255,255,255,0.5); background: rgba(255,255,255,0.14); color: #fff; border-radius: 999px; font: inherit; font-size: 0.78rem; cursor: pointer; }
+  .cta { display: block; width: 100%; text-align: center; padding: 0.7rem; border: 1px solid rgba(255,255,255,0.32); background: rgba(255,255,255,0.10); color: #fff; border-radius: 999px; font: inherit; font-size: 0.78rem; letter-spacing: 0.02em; cursor: pointer; transition: background 0.18s, border-color 0.18s; }
+  .cta:hover { background: rgba(255,255,255,0.2); border-color: rgba(255,255,255,0.55); }
   .cta.ghost { opacity: 0.6; cursor: default; }
-  .prompt { position: absolute; left: 50%; bottom: 12vh; transform: translateX(-50%); background: rgba(255,255,255,0.92); color: #14202e; padding: 0.55rem 1rem; border-radius: 999px; font-size: 0.9rem; box-shadow: 0 8px 24px rgba(0,0,0,0.25); display: flex; align-items: center; gap: 0.5rem; }
-  .prompt .key { background: #14202e; color: #fff; border-radius: 5px; padding: 0 6px; font-size: 0.72rem; font-weight: 700; }
+  .prompt { position: absolute; left: 50%; bottom: 12vh; transform: translateX(-50%); background: rgba(16,24,34,0.42); backdrop-filter: blur(18px) saturate(1.3); -webkit-backdrop-filter: blur(18px) saturate(1.3); border: 1px solid rgba(255,255,255,0.22); color: #fff; text-shadow: 0 1px 4px rgba(0,0,0,0.55); padding: 0.5rem 1rem 0.5rem 0.55rem; border-radius: 999px; font-size: 0.88rem; box-shadow: 0 10px 30px rgba(0,0,0,0.28); display: flex; align-items: center; gap: 0.55rem; }
+  .prompt .key { background: rgba(255,255,255,0.92); color: #14202e; border-radius: 6px; padding: 1px 7px; font-size: 0.72rem; font-weight: 700; box-shadow: 0 1px 3px rgba(0,0,0,0.3); }
   .toast { position: absolute; left: 50%; top: 12%; transform: translateX(-50%); background: rgba(20,28,38,0.9); color: #fff; padding: 0.7rem 1.1rem; border-radius: 12px; font-size: 0.9rem; }
   .hint { position: absolute; right: 16px; bottom: 14px; color: #fff; font-size: 0.64rem; letter-spacing: 0.08em; text-align: right; text-shadow: 0 1px 4px rgba(0,0,0,0.5); }
   .badge { position: absolute; left: 16px; bottom: 14px; color: rgba(255,255,255,0.85); font-size: 0.64rem; letter-spacing: 0.08em; text-shadow: 0 1px 4px rgba(0,0,0,0.5); }
