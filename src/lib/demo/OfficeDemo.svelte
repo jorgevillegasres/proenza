@@ -33,10 +33,26 @@
   let camYaw = $state(0) // para la brújula
   let soundOn = $state(false)
   let audioEl = null
+  // Pasos sintetizados con WebAudio (ráfaga de ruido filtrado).
+  let footCtx = null
+  function ensureFootAudio() {
+    if (!footCtx) { try { footCtx = new (window.AudioContext || window.webkitAudioContext)() } catch { footCtx = null } }
+    if (footCtx && footCtx.state === 'suspended') footCtx.resume()
+  }
+  function playFootstep() {
+    if (!footCtx) return
+    const t = footCtx.currentTime, len = Math.floor(footCtx.sampleRate * 0.09)
+    const buf = footCtx.createBuffer(1, len, footCtx.sampleRate); const d = buf.getChannelData(0)
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 3)
+    const src = footCtx.createBufferSource(); src.buffer = buf
+    const flt = footCtx.createBiquadFilter(); flt.type = 'lowpass'; flt.frequency.value = 360
+    const g = footCtx.createGain(); g.gain.setValueAtTime(0.15, t)
+    src.connect(flt); flt.connect(g); g.connect(footCtx.destination); src.start(t)
+  }
   function toggleSound() {
     if (!audioEl) { audioEl = new Audio(ambienteUrl); audioEl.loop = true; audioEl.volume = 0.3 }
     if (soundOn) { audioEl.pause(); soundOn = false }
-    else audioEl.play().then(() => (soundOn = true)).catch(() => (soundOn = false))
+    else audioEl.play().then(() => { soundOn = true; ensureFootAudio() }).catch(() => (soundOn = false))
   }
 
   // Estaciones del despacho (la geometría se construye en onMount).
@@ -455,11 +471,13 @@
       const eye = 1.62
       const cpos = new THREE.Vector3(0, eye, HALL_Z1 - 1.5)
       let yaw = 0, pitch = -0.03
-      const onKD = (e) => { const k = e.key.toLowerCase(); if (['w', 'a', 's', 'd', ' '].includes(k)) e.preventDefault(); if (k === 'escape') { closeStation(); return } if (open) return; if (k === 'e' && active) { openStation(STATIONS.find((x) => x.id === active.id)); return } keys.add(k) }
+      let introT = 0; const INTRO_DUR = 4.0 // animación cinematográfica de entrada
+      const skipIntro = () => { if (introT < INTRO_DUR) introT = INTRO_DUR }
+      const onKD = (e) => { const k = e.key.toLowerCase(); if (['w', 'a', 's', 'd', ' '].includes(k)) e.preventDefault(); if (k === 'escape') { closeStation(); return } if (open) return; ensureFootAudio(); skipIntro(); if (k === 'e' && active) { openStation(STATIONS.find((x) => x.id === active.id)); return } keys.add(k) }
       const onKU = (e) => keys.delete(e.key.toLowerCase())
       addEventListener('keydown', onKD); addEventListener('keyup', onKU)
       let dragging = false, lx = 0, ly = 0
-      const down = (x, y) => { if (open) return; dragging = true; lx = x; ly = y }
+      const down = (x, y) => { if (open) return; skipIntro(); dragging = true; lx = x; ly = y }
       const lookm = (x, y) => { if (!dragging) return; yaw -= (x - lx) * 0.0026; pitch = Math.max(-1.0, Math.min(0.85, pitch - (y - ly) * 0.0026)); lx = x; ly = y }
       const upp = () => { dragging = false }
       const md = (e) => down(e.clientX, e.clientY), mm = (e) => lookm(e.clientX, e.clientY)
@@ -508,9 +526,22 @@
 
       const clock = new THREE.Clock(); let raf = 0
       const fwd = new THREE.Vector3(), rgt = new THREE.Vector3(), tv = new THREE.Vector3()
+      let stepTimer = 0
       function frame() {
         raf = requestAnimationFrame(frame)
-        const dt = Math.min(clock.getDelta(), 0.05)
+        const rawDt = clock.getDelta()
+        const dt = Math.min(rawDt, 0.05)
+        // --- intro cinematográfica: dolly suave hacia el punto de spawn ---
+        if (introT < INTRO_DUR && !open) {
+          introT += rawDt
+          const t = Math.min(1, introT / INTRO_DUR), e = 1 - Math.pow(1 - t, 3)
+          camera.rotation.order = 'YXZ'
+          camera.rotation.set(-0.24 * (1 - e) + pitch * e, 0.18 * (1 - e), 0)
+          camera.position.set(0.5 * (1 - e), 2.5 + (eye - 2.5) * e, (HALL_Z1 + 1.4) + ((HALL_Z1 - 1.5) - (HALL_Z1 + 1.4)) * e)
+          if (composer) composer.render(); else renderer.render(scene, camera)
+          if (!ready) ready = true
+          return
+        }
         if (!open) {
           if (wasOpen) {
             // al cerrar, retoma desde donde quedó la cámara (sin salto)
@@ -531,7 +562,9 @@
             cpos.addScaledVector(fwd, mz * 3.4 * dt)
             cpos.x = Math.max(X_L + 0.5, Math.min(X_R - 0.5, cpos.x))
             cpos.z = Math.max(HALL_Z0 + 1.2, Math.min(HALL_Z1 - 0.6, cpos.z))
-          }
+            stepTimer += dt
+            if (soundOn && stepTimer >= 0.45) { stepTimer = 0; playFootstep() }
+          } else stepTimer = 0.4
           cpos.y = eye; camera.position.copy(cpos)
           camYaw = yaw
           // proximidad
@@ -637,7 +670,10 @@
         </div>
         <div class="sheet-body">
           {#if open.type === 'office'}
-            <div class="law"><span class="mono">{initials(open.lawyer.name)}</span><div><b>{open.lawyer.name}</b><small>{open.lawyer.role}</small></div></div>
+            <div class="law">
+              {#if open.lawyer.photo}<img class="avatar" src={open.lawyer.photo} alt={open.lawyer.name} />{:else}<span class="mono">{initials(open.lawyer.name)}</span>{/if}
+              <div><b>{open.lawyer.name}</b><small>{open.lawyer.role}</small></div>
+            </div>
             <p>{open.lawyer.bio}</p>
             <form class="form" onsubmit={(e) => citaWhats(e, open.lawyer)}>
               <div class="row"><label>Nombre<input bind:value={f.nombre} required /></label><label>Contacto<input bind:value={f.contacto} required placeholder="WhatsApp / correo" /></label></div>
@@ -717,6 +753,7 @@
   .sheet-body { padding: 1.3rem; overflow-y: auto; color: #14202e; }
   .law { display: flex; align-items: center; gap: 0.7rem; margin-bottom: 0.6rem; }
   .mono { width: 50px; height: 50px; border-radius: 50%; display: grid; place-items: center; background: #1b4d89; color: #fff; font-weight: 700; }
+  .avatar { width: 50px; height: 50px; border-radius: 50%; object-fit: cover; flex-shrink: 0; box-shadow: 0 2px 8px rgba(0,0,0,0.2); }
   .law small { display: block; color: #45525f; }
   .form { display: grid; gap: 0.8rem; margin-top: 0.5rem; }
   .row { display: grid; grid-template-columns: 1fr 1fr; gap: 0.8rem; }
