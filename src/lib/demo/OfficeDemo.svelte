@@ -665,9 +665,13 @@
     <div class="overlay">
       <button class="scrim" aria-label="Cerrar" onclick={closeStation}></button>
       <div class="sheet">
+        <span class="hud tl"></span><span class="hud tr"></span><span class="hud bl"></span><span class="hud br"></span>
         <div class="sheet-head">
-          <h3>{open.type === 'office' ? `Agenda con ${open.lawyer.name}` : open.type === 'reception' ? 'Deja tu caso' : 'Biblioteca'}</h3>
-          <button class="x" onclick={closeStation}>✕</button>
+          <div class="titles">
+            <span class="eyebrow">{open.type === 'office' ? 'Proenza · Agenda' : open.type === 'reception' ? 'Proenza · Casos' : 'Proenza · Biblioteca'}</span>
+            <h3>{open.type === 'office' ? 'Agenda tu cita' : open.type === 'reception' ? 'Deja tu caso' : 'Biblioteca jurídica'}</h3>
+          </div>
+          <button class="x" onclick={closeStation} aria-label="Cerrar">✕</button>
         </div>
         <div class="sheet-body">
           {#if open.type === 'office'}
@@ -708,7 +712,7 @@
 </div>
 
 <style>
-  .demo { position: fixed; inset: 0; overflow: hidden; background: #cdd6df; font-family: var(--ui-font, system-ui, sans-serif); }
+  .demo { position: fixed; inset: 0; overflow: hidden; background: #cdd6df; font-family: 'Inter', system-ui, -apple-system, sans-serif; }
   canvas { display: block; width: 100%; height: 100%; cursor: grab; touch-action: none; }
   .nav { position: absolute; top: 16px; left: 16px; right: 16px; display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; pointer-events: none; }
   .brand { background: rgba(255,255,255,0.88); backdrop-filter: blur(8px); border-radius: 10px; padding: 0.5rem 0.9rem; box-shadow: 0 6px 20px rgba(0,0,0,0.15); pointer-events: auto; }
@@ -719,7 +723,7 @@
   .social a { width: 28px; height: 28px; display: grid; place-items: center; border-radius: 50%; background: rgba(255,255,255,0.18); backdrop-filter: blur(8px); color: #fff; font-size: 0.62rem; font-weight: 700; text-shadow: 0 1px 3px rgba(0,0,0,0.4); }
   .social a:hover { background: rgba(255,255,255,0.35); }
   .explore { position: absolute; top: 50%; right: 4vw; transform: translateY(-50%); width: 270px; background: rgba(16,24,34,0.18); backdrop-filter: blur(26px) saturate(1.3); -webkit-backdrop-filter: blur(26px) saturate(1.3); border: 1px solid rgba(255,255,255,0.14); border-radius: 20px; padding: 1.3rem; color: #fff; text-shadow: 0 1px 5px rgba(0,0,0,0.55); box-shadow: 0 24px 60px rgba(0,0,0,0.32), inset 0 1px 0 rgba(255,255,255,0.22); }
-  .explore h2 { font-size: 1rem; margin: 0 0 0.8rem; }
+  .explore h2 { font-family: 'Cormorant Garamond', Georgia, serif; font-weight: 600; font-size: 1.45rem; line-height: 1.05; margin: 0 0 0.8rem; letter-spacing: 0.01em; }
   .explore .poi { font-size: 0.78rem; opacity: 0.85; margin: 0 0 0.4rem; }
   .explore ul { list-style: none; margin: 0 0 0.8rem; padding: 0; display: grid; gap: 0.3rem; font-size: 0.84rem; }
   .explore li.done { color: #9fe6c0; }
@@ -746,26 +750,66 @@
   .loader { position: absolute; inset: 0; display: grid; place-content: center; color: #33414f; }
 
   .overlay { position: absolute; inset: 0; display: flex; justify-content: center; align-items: center; z-index: 20; }
-  .scrim { position: absolute; inset: 0; border: 0; background: rgba(8,14,28,0.5); backdrop-filter: blur(4px); cursor: pointer; }
-  .sheet { position: relative; width: min(640px, 92vw); max-height: 86vh; background: #fffdf8; border-radius: 16px; display: flex; flex-direction: column; box-shadow: 0 24px 70px rgba(0,0,0,0.4); }
-  .sheet-head { display: flex; justify-content: space-between; align-items: center; padding: 1rem 1.3rem; border-bottom: 1px solid #e7e2d6; }
-  .sheet-head h3 { margin: 0; font-family: Georgia, serif; font-size: 1.25rem; color: #14202e; }
-  .x { width: 36px; height: 36px; border-radius: 50%; border: 1px solid #e7e2d6; background: #fff; cursor: pointer; }
-  .sheet-body { padding: 1.3rem; overflow-y: auto; color: #14202e; }
-  .law { display: flex; align-items: center; gap: 0.7rem; margin-bottom: 0.6rem; }
-  .mono { width: 50px; height: 50px; border-radius: 50%; display: grid; place-items: center; background: #1b4d89; color: #fff; font-weight: 700; }
-  .avatar { width: 50px; height: 50px; border-radius: 50%; object-fit: cover; flex-shrink: 0; box-shadow: 0 2px 8px rgba(0,0,0,0.2); }
-  .law small { display: block; color: #45525f; }
-  .form { display: grid; gap: 0.8rem; margin-top: 0.5rem; }
-  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 0.8rem; }
-  label { display: grid; gap: 0.3rem; font-size: 0.84rem; font-weight: 600; }
-  input, textarea { font: inherit; font-weight: 400; padding: 0.6rem 0.75rem; border: 1px solid #ddd; border-radius: 8px; }
-  .send { padding: 0.8rem; border: 0; border-radius: 999px; background: linear-gradient(180deg, #ddb869, #c29a4b); color: #2a2008; font-weight: 700; cursor: pointer; }
-  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.8rem; }
-  .card { text-align: left; border: 1px solid #e7e2d6; background: #fff; border-radius: 12px; padding: 1rem; cursor: pointer; display: grid; gap: 0.3rem; }
-  .tag { font-size: 0.7rem; color: #1b4d89; text-transform: capitalize; }
-  .back { background: none; border: 0; color: #1b4d89; font-weight: 600; cursor: pointer; padding: 0 0 0.6rem; }
-  .prose :global(h2) { font-size: 1.1rem; margin-top: 1.2rem; }
+  .scrim { position: absolute; inset: 0; border: 0; cursor: pointer; animation: fade 0.35s ease;
+    background: radial-gradient(130% 120% at 50% 38%, rgba(12,26,46,0.42), rgba(3,7,16,0.74)); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
+
+  /* --- Panel holográfico flotante --- */
+  .sheet {
+    position: relative; width: min(660px, 92vw); max-height: 86vh; display: flex; flex-direction: column;
+    border: 1px solid transparent; border-radius: 18px; color: #e9f3fb; overflow: hidden;
+    background:
+      linear-gradient(158deg, rgba(13,24,42,0.82), rgba(7,14,28,0.9)) padding-box,
+      linear-gradient(135deg, rgba(110,214,255,0.75), rgba(120,140,255,0.2) 45%, rgba(110,214,255,0.55)) border-box;
+    backdrop-filter: blur(22px) saturate(1.4); -webkit-backdrop-filter: blur(22px) saturate(1.4);
+    box-shadow: 0 30px 90px rgba(0,0,0,0.55), 0 0 70px rgba(70,170,255,0.16), inset 0 1px 0 rgba(160,225,255,0.22);
+    animation: sheetIn 0.5s cubic-bezier(0.16,0.84,0.3,1);
+  }
+  .sheet::before { content: ''; position: absolute; inset: 0; pointer-events: none; border-radius: inherit; opacity: 0.5;
+    background: repeating-linear-gradient(0deg, rgba(150,210,255,0.05) 0 1px, transparent 1px 4px); }
+  .sheet::after { content: ''; position: absolute; left: 9%; right: 9%; top: 0; height: 1px; pointer-events: none;
+    background: linear-gradient(90deg, transparent, rgba(150,220,255,0.9), transparent); box-shadow: 0 0 12px rgba(120,200,255,0.7); }
+  .hud { position: absolute; width: 17px; height: 17px; pointer-events: none; z-index: 2; border: 1.5px solid rgba(125,215,255,0.85); }
+  .hud.tl { top: 9px; left: 9px; border-right: 0; border-bottom: 0; border-top-left-radius: 6px; }
+  .hud.tr { top: 9px; right: 9px; border-left: 0; border-bottom: 0; border-top-right-radius: 6px; }
+  .hud.bl { bottom: 9px; left: 9px; border-right: 0; border-top: 0; border-bottom-left-radius: 6px; }
+  .hud.br { bottom: 9px; right: 9px; border-left: 0; border-top: 0; border-bottom-right-radius: 6px; }
+
+  .sheet-head { position: relative; z-index: 1; display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; padding: 1.3rem 1.5rem 1rem; border-bottom: 1px solid rgba(130,190,240,0.14); }
+  .eyebrow { display: block; font-size: 0.64rem; font-weight: 600; letter-spacing: 0.28em; text-transform: uppercase; color: #7fd3ff; margin-bottom: 0.4rem; }
+  .sheet-head h3 { margin: 0; font-family: 'Cormorant Garamond', Georgia, serif; font-weight: 600; font-size: 1.9rem; line-height: 1.04; color: #f3f9ff; letter-spacing: 0.01em; }
+  .x { width: 34px; height: 34px; border-radius: 50%; border: 1px solid rgba(140,200,245,0.3); background: rgba(255,255,255,0.06); color: #cfe6f7; cursor: pointer; flex-shrink: 0; transition: background 0.18s, border-color 0.18s; }
+  .x:hover { background: rgba(125,215,255,0.18); border-color: rgba(125,215,255,0.6); }
+
+  .sheet-body { position: relative; z-index: 1; padding: 1.25rem 1.5rem 1.5rem; overflow-y: auto; }
+  .sheet-body p { color: #b6c8da; line-height: 1.6; font-size: 0.92rem; }
+  .law { display: flex; align-items: center; gap: 0.85rem; margin-bottom: 0.7rem; }
+  .mono { width: 54px; height: 54px; border-radius: 50%; display: grid; place-items: center; background: linear-gradient(150deg, #1b4d89, #0e2c52); color: #fff; font-weight: 700; box-shadow: 0 0 0 1px rgba(125,215,255,0.4), 0 0 18px rgba(70,160,255,0.3); }
+  .avatar { width: 54px; height: 54px; border-radius: 50%; object-fit: cover; flex-shrink: 0; box-shadow: 0 0 0 1px rgba(125,215,255,0.5), 0 0 18px rgba(70,160,255,0.35); }
+  .law b { font-family: 'Cormorant Garamond', Georgia, serif; font-size: 1.32rem; font-weight: 600; color: #f3f9ff; }
+  .law small { display: block; color: #7fd3ff; font-size: 0.7rem; letter-spacing: 0.16em; text-transform: uppercase; margin-top: 0.15rem; }
+
+  .form { display: grid; gap: 0.9rem; margin-top: 0.9rem; }
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 0.9rem; }
+  label { display: grid; gap: 0.35rem; font-size: 0.62rem; font-weight: 600; letter-spacing: 0.16em; text-transform: uppercase; color: #8fa6bb; }
+  input, textarea { font: inherit; font-size: 0.9rem; font-weight: 400; letter-spacing: normal; text-transform: none; color: #eaf3fb; padding: 0.65rem 0.8rem; border: 1px solid rgba(130,190,240,0.22); border-radius: 10px; background: rgba(8,16,30,0.5); transition: border-color 0.18s, box-shadow 0.18s; }
+  input::placeholder, textarea::placeholder { color: #61748a; }
+  input:focus, textarea:focus { outline: 0; border-color: rgba(125,215,255,0.8); box-shadow: 0 0 0 3px rgba(95,200,255,0.15), 0 0 16px rgba(80,180,255,0.2); }
+  .send { margin-top: 0.3rem; padding: 0.85rem; border: 1px solid rgba(160,225,255,0.5); border-radius: 999px; background: linear-gradient(180deg, rgba(110,205,255,0.95), rgba(70,150,235,0.95)); color: #04121f; font-weight: 700; letter-spacing: 0.04em; cursor: pointer; box-shadow: 0 6px 22px rgba(50,140,235,0.35), inset 0 1px 0 rgba(255,255,255,0.4); transition: transform 0.15s, box-shadow 0.15s; }
+  .send:hover { transform: translateY(-1px); box-shadow: 0 10px 30px rgba(50,140,235,0.5), inset 0 1px 0 rgba(255,255,255,0.5); }
+
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.85rem; }
+  .card { text-align: left; border: 1px solid rgba(130,190,240,0.2); background: linear-gradient(160deg, rgba(16,30,52,0.6), rgba(9,18,34,0.6)); border-radius: 14px; padding: 1rem 1.1rem; cursor: pointer; display: grid; gap: 0.35rem; color: #e9f3fb; transition: border-color 0.18s, transform 0.18s, box-shadow 0.18s; }
+  .card:hover { border-color: rgba(125,215,255,0.6); transform: translateY(-2px); box-shadow: 0 12px 30px rgba(0,0,0,0.4), 0 0 24px rgba(70,160,255,0.2); }
+  .card b { font-family: 'Cormorant Garamond', Georgia, serif; font-size: 1.18rem; font-weight: 600; color: #f3f9ff; line-height: 1.15; }
+  .card small { color: #8fa6bb; font-size: 0.72rem; }
+  .tag { font-size: 0.6rem; color: #7fd3ff; text-transform: uppercase; letter-spacing: 0.18em; }
+  .back { background: none; border: 0; color: #7fd3ff; font-weight: 600; cursor: pointer; padding: 0 0 0.7rem; letter-spacing: 0.04em; }
+  .prose { color: #c2d2e2; line-height: 1.65; }
+  .prose h4 { font-family: 'Cormorant Garamond', Georgia, serif; font-weight: 600; font-size: 1.5rem; color: #f3f9ff; margin: 0 0 0.6rem; }
+  .prose :global(h2) { font-family: 'Cormorant Garamond', Georgia, serif; font-size: 1.2rem; color: #eaf3fb; margin-top: 1.2rem; }
+
+  @keyframes sheetIn { from { opacity: 0; transform: translateY(16px) scale(0.97); } to { opacity: 1; transform: none; } }
+  @keyframes fade { from { opacity: 0; } to { opacity: 1; } }
   @media (max-width: 720px) {
     .explore { top: 60px; right: 8px; left: auto; bottom: auto; transform: none; width: 165px; padding: 0.8rem; max-height: 50vh; overflow: auto; }
     .explore h2 { font-size: 0.82rem; margin-bottom: 0.5rem; }
