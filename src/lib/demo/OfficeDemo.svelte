@@ -120,6 +120,24 @@
         lamp: new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xfff0d8, emissiveIntensity: 3 }),
       }
 
+      // --- texturas procedurales (rompen el color plano) ---------------------
+      const mkTex = (draw, rep = 1) => {
+        const c = document.createElement('canvas'); c.width = c.height = 512; const g = c.getContext('2d'); draw(g, 512)
+        const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(rep, rep); t.anisotropy = 8; return t
+      }
+      const marbleTex = (base, vein) => mkTex((g, s) => {
+        g.fillStyle = base; g.fillRect(0, 0, s, s)
+        g.strokeStyle = vein; g.lineWidth = 1; g.globalAlpha = 0.12
+        for (let i = 0; i < 26; i++) { g.beginPath(); let x = Math.random() * s, y = Math.random() * s; g.moveTo(x, y); for (let k = 0; k < 6; k++) { x += (Math.random() - 0.5) * s * 0.5; y += (Math.random() - 0.5) * s * 0.5; g.lineTo(x, y) } g.stroke() }
+      })
+      const woodTex = (base, dark) => mkTex((g, s) => {
+        g.fillStyle = base; g.fillRect(0, 0, s, s); g.globalAlpha = 0.18; g.strokeStyle = dark
+        for (let x = 0; x < s; x += 3) { g.lineWidth = 0.5 + Math.random() * 1.6; g.beginPath(); g.moveTo(x + (Math.random() - 0.5) * 4, 0); g.bezierCurveTo(x + 8, s * 0.33, x - 8, s * 0.66, x + (Math.random() - 0.5) * 4, s); g.stroke() }
+      })
+      M.floor.map = marbleTex('#b4bac0', '#7f868d'); M.floor.map.repeat.set(6, 6)
+      M.wood.map = woodTex('#4a2f1d', '#2c1a0e'); M.wood.map.repeat.set(2, 2)
+      M.deskTop.map = woodTex('#2a1c12', '#150d07'); M.deskTop.map.repeat.set(2, 2)
+
       const HALL_Z0 = -9.2, HALL_Z1 = 11, H = 3.3, X_L = -2.2, X_R = 2.2, X_LBACK = -7.5
       const grp = new THREE.Group(); scene.add(grp)
       const addM = (m, cast = true, rec = true) => { m.castShadow = cast; m.receiveShadow = rec; grp.add(m); return m }
@@ -142,6 +160,29 @@
         g.add(new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.42, 12), M.frame).translateY(0.27))
         g.add(new THREE.Mesh(new THREE.CylinderGeometry(0.26, 0.28, 0.05, 5), M.frame).translateY(0.05))
         g.position.set(x, 0, z); g.rotation.y = ry
+        g.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true } })
+        grp.add(g); return g
+      }
+      // Sillón (cojín, respaldo reclinado, brazos, patas). Mira hacia +z local.
+      const armchair = (x, z, ry, color = 0x394049) => {
+        const g = new THREE.Group(); const m = mat(color, { roughness: 0.78, envMapIntensity: 0.8 })
+        g.add(new THREE.Mesh(geom(0.82, 0.22, 0.78, 1.6), m).translateY(0.34))           // cojín de asiento
+        const back = new THREE.Mesh(geom(0.82, 0.62, 0.18, 1.6), m); back.position.set(0, 0.64, -0.32); back.rotation.x = -0.09; g.add(back)
+        g.add(new THREE.Mesh(geom(0.16, 0.36, 0.74, 1.6), m).translateY(0.43).translateX(-0.35)) // brazo izq
+        g.add(new THREE.Mesh(geom(0.16, 0.36, 0.74, 1.6), m).translateY(0.43).translateX(0.35))  // brazo der
+        for (const sx of [-0.33, 0.33]) for (const sz of [-0.32, 0.32]) g.add(new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.024, 0.22, 8), M.frame).translateY(0.11).translateX(sx).translateZ(sz))
+        g.position.set(x, 0, z); g.rotation.y = ry
+        g.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true } })
+        grp.add(g); return g
+      }
+      // Planta en maceta (follaje con varios blobs suaves).
+      const plant = (x, z, s = 1) => {
+        const g = new THREE.Group()
+        g.add(new THREE.Mesh(new THREE.CylinderGeometry(0.2 * s, 0.15 * s, 0.36 * s, 18), mat(0x2a2d31, { roughness: 0.6 })).translateY(0.18 * s))
+        const leaf = mat(0x356b3f, { roughness: 0.85 })
+        const blobs = [[0, 0.58, 0, 0.34], [0.18, 0.74, 0.05, 0.25], [-0.15, 0.76, -0.06, 0.23], [0.05, 0.92, 0.02, 0.21], [-0.06, 0.66, 0.17, 0.2]]
+        for (const [bx, by, bz, br] of blobs) { const mm = new THREE.Mesh(new THREE.IcosahedronGeometry(br * s, 2), leaf); mm.position.set(bx * s, by * s, bz * s); mm.scale.y = 1.2; g.add(mm) }
+        g.position.set(x, 0, z)
         g.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true } })
         grp.add(g); return g
       }
@@ -234,7 +275,7 @@
         // detalle interior: monitor, planta de esquina, diploma en la pared
         box(0.5, 0.3, 0.04, M.dark, X_L - 2.4, 1.18, zc, Math.PI / 2)
         box(0.14, 0.16, 0.1, M.dark, X_L - 2.3, 1.0, zc)
-        { const fol = new THREE.Mesh(new THREE.IcosahedronGeometry(0.32, 1), mat(0x2f6f43)); fol.position.set(X_LBACK + 0.55, 0.62, zc + 1.05); fol.scale.y = 1.35; grp.add(fol); box(0.26, 0.34, 0.26, M.dark, X_LBACK + 0.55, 0.17, zc + 1.05) }
+        plant(X_LBACK + 0.55, zc + 1.05, 0.92)
         box(0.45, 0.6, 0.04, mat(0xc6a05a, { metalness: 0.25, roughness: 0.4 }), X_LBACK + 0.05, 1.75, zc - 0.7, Math.PI / 2)
         // letrero colgante con el nombre
         const sign = textSign(s.label.toUpperCase(), s.sub, 2.4, 0.62, 0x8fd0ff)
@@ -262,14 +303,11 @@
         box(2.4, 0.03, 2.0, mat(0x6f3b34, { roughness: 0.95 }), X_LBACK + 2.7, 0.015, zc)
         box(1.3, 0.45, 0.8, M.wood, X_LBACK + 2.7, 0.42, zc)
         box(1.4, 0.05, 0.9, M.deskTop, X_LBACK + 2.7, 0.66, zc)
-        const aMat = mat(0x394049, { roughness: 0.7 })
-        for (const dz of [-1.0, 1.0]) {
-          box(0.78, 0.4, 0.78, aMat, X_LBACK + 2.7, 0.3, zc + dz)
-          box(0.78, 0.55, 0.16, aMat, X_LBACK + 2.7, 0.62, zc + dz + 0.31 * Math.sign(dz))
-        }
-        // lámpara de pie en la esquina
-        box(0.05, 1.5, 0.05, M.frame, X_LBACK + 0.7, 0.75, zc + hd - 0.3)
-        box(0.34, 0.26, 0.34, M.lamp, X_LBACK + 0.7, 1.6, zc + hd - 0.3)
+        for (const dz of [-1.0, 1.0]) armchair(X_LBACK + 2.7, zc + dz, dz < 0 ? 0 : Math.PI, 0x3a414b)
+        // lámpara de pie en la esquina (poste cilíndrico + pantalla)
+        cyl(0.025, 0.032, 1.5, M.frame, X_LBACK + 0.7, 0.75, zc + hd - 0.3, 12)
+        cyl(0.13, 0.16, 0.06, M.frame, X_LBACK + 0.7, 0.04, zc + hd - 0.3, 18) // base
+        const shade = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.26, 0.3, 24, 1, true), M.lamp); shade.position.set(X_LBACK + 0.7, 1.62, zc + hd - 0.3); addM(shade)
         // letrero colgante
         const sign = textSign('BIBLIOTECA', 'Blog jurídico', 2.3, 0.6, 0x8fd0ff)
         sign.position.set(X_L + 0.04, 2.25, zc); sign.rotation.y = Math.PI / 2; grp.add(sign)
@@ -279,14 +317,11 @@
 
       // --- sala de espera junto al ventanal (derecha, entrada) ---------------
       {
-        const zc = 8.8, aMat = mat(0x2c3138, { roughness: 0.7 })
-        box(2.2, 0.03, 1.8, mat(0x4a4640, { roughness: 0.95 }), X_R - 1.4, 0.015, zc) // alfombra
-        for (const dz of [-0.75, 0.75]) {
-          box(0.8, 0.4, 0.8, aMat, X_R - 1.0, 0.3, zc + dz)         // asiento mirando al ventanal
-          box(0.16, 0.55, 0.8, aMat, X_R - 1.38, 0.62, zc + dz)     // respaldo
-        }
-        box(0.55, 0.4, 0.55, M.wood, X_R - 2.1, 0.2, zc)            // mesa de centro
-        { const fol = new THREE.Mesh(new THREE.IcosahedronGeometry(0.45, 1), mat(0x2f6f43)); fol.position.set(X_R - 1.0, 0.85, zc - 1.4); fol.scale.y = 1.5; grp.add(fol); box(0.32, 0.5, 0.32, M.dark, X_R - 1.0, 0.25, zc - 1.4) }
+        const zc = 8.8
+        box(2.2, 0.03, 1.8, mat(0x4a4640, { roughness: 0.95 }), X_R - 1.2, 0.015, zc) // alfombra
+        for (const dz of [-0.78, 0.78]) armchair(X_R - 1.0, zc + dz, dz < 0 ? 0 : Math.PI, 0x2c3138) // enfrentados, junto al ventanal
+        box(0.6, 0.4, 0.6, M.wood, X_R - 1.0, 0.2, zc)             // mesa de centro
+        plant(X_R - 1.7, zc - 1.5, 1.2)
       }
 
       // --- rincón de café (izquierda, junto a la recepción) ------------------
@@ -295,7 +330,7 @@
         box(1.0, 0.9, 0.5, M.wood, X_LBACK + 0.5, 0.45, zc)
         box(1.05, 0.05, 0.55, M.deskTop, X_LBACK + 0.5, 0.92, zc)
         box(0.2, 0.3, 0.2, M.dark, X_LBACK + 0.5, 1.1, zc + 0.15) // máquina de café
-        { const fol = new THREE.Mesh(new THREE.IcosahedronGeometry(0.4, 1), mat(0x2f6f43)); fol.position.set(X_LBACK + 0.5, 0.8, zc - 1.2); fol.scale.y = 1.4; grp.add(fol); box(0.3, 0.45, 0.3, M.dark, X_LBACK + 0.5, 0.22, zc - 1.2) }
+        plant(X_LBACK + 0.5, zc - 1.2, 1.05)
       }
       // recepción punto de proximidad
       proxPoints.push({ s: STATIONS.find((x) => x.id === 'recepcion'), x: -1.2, z: HALL_Z0 + 3.0 })
@@ -373,7 +408,8 @@
           import('three/examples/jsm/postprocessing/OutputPass.js'),
         ])
         // render target multisampleado → antialiasing MSAA (elimina el dentado "N64")
-        const rt = new THREE.WebGLRenderTarget(innerWidth, innerHeight, { samples: 2 })
+        const lowEnd = matchMedia('(pointer: coarse)').matches || innerWidth < 820
+        const rt = new THREE.WebGLRenderTarget(innerWidth, innerHeight, { samples: lowEnd ? 2 : 4 })
         composer = new EffectComposer(renderer, rt); composer.addPass(new RenderPass(scene, camera))
         composer.addPass(new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.32, 0.6, 0.85)); composer.addPass(new OutputPass())
       } catch { composer = null }
