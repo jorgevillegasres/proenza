@@ -78,6 +78,8 @@
       let THREE
       try { THREE = await import('three') } catch { failed = true; return }
       if (cancelled) return
+      let RoundedBoxGeometry = null
+      try { ({ RoundedBoxGeometry } = await import('three/examples/jsm/geometries/RoundedBoxGeometry.js')) } catch { RoundedBoxGeometry = null }
 
       let renderer
       try { renderer = new THREE.WebGLRenderer({ canvas, antialias: true }); if (!renderer.getContext()) throw 0 } catch { failed = true; return }
@@ -104,16 +106,16 @@
         })
       }
 
-      const mat = (c, o = {}) => new THREE.MeshStandardMaterial({ color: c, ...o })
+      const mat = (c, o = {}) => new THREE.MeshStandardMaterial({ color: c, envMapIntensity: 1.0, ...o })
       const M = {
-        floor: mat(0xacb2b8, { roughness: 0.18 }),
-        wall: mat(0xe6e4df, { roughness: 0.92 }),
-        ceil: mat(0xe2e1dd, { roughness: 1 }),
-        wood: mat(0x4a2f1d, { roughness: 0.45, metalness: 0.1 }),
-        deskTop: mat(0x2a1c12, { roughness: 0.3 }),
-        glass: new THREE.MeshStandardMaterial({ color: 0xcfe0ec, roughness: 0.05, transparent: true, opacity: 0.16 }),
-        frame: mat(0x20242a, { roughness: 0.6, metalness: 0.4 }),
-        dark: mat(0x14171b, { roughness: 0.5 }),
+        floor: mat(0xb4bac0, { roughness: 0.14, metalness: 0.0, envMapIntensity: 1.4 }),
+        wall: mat(0xeae8e3, { roughness: 0.9 }),
+        ceil: mat(0xe4e3df, { roughness: 1 }),
+        wood: mat(0x4a2f1d, { roughness: 0.4, metalness: 0.1, envMapIntensity: 1.1 }),
+        deskTop: mat(0x2a1c12, { roughness: 0.28, envMapIntensity: 1.2 }),
+        glass: new THREE.MeshStandardMaterial({ color: 0xcfe0ec, roughness: 0.04, metalness: 0.0, transparent: true, opacity: 0.13, envMapIntensity: 1.6 }),
+        frame: mat(0x23272d, { roughness: 0.45, metalness: 0.7, envMapIntensity: 1.3 }),
+        dark: mat(0x14171b, { roughness: 0.45, metalness: 0.2 }),
         line: new THREE.MeshStandardMaterial({ color: 0xeaf6ff, emissive: 0x9fd4ff, emissiveIntensity: 2.2 }),
         lamp: new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xfff0d8, emissiveIntensity: 3 }),
       }
@@ -121,8 +123,28 @@
       const HALL_Z0 = -9.2, HALL_Z1 = 11, H = 3.3, X_L = -2.2, X_R = 2.2, X_LBACK = -7.5
       const grp = new THREE.Group(); scene.add(grp)
       const addM = (m, cast = true, rec = true) => { m.castShadow = cast; m.receiveShadow = rec; grp.add(m); return m }
-      const box = (w, h, d, material, x, y, z, ry = 0) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), material); m.position.set(x, y, z); m.rotation.y = ry; return addM(m) }
+      // Caja con aristas redondeadas (radio adaptativo) — evita el look "cuadriculado".
+      const geom = (w, h, d, soft = 1) => {
+        if (RoundedBoxGeometry) {
+          const r = Math.max(0.006, Math.min(0.035 * soft, w / 2, h / 2, d / 2) * 0.85)
+          return new RoundedBoxGeometry(w, h, d, 2, r)
+        }
+        return new THREE.BoxGeometry(w, h, d)
+      }
+      const box = (w, h, d, material, x, y, z, ry = 0) => { const m = new THREE.Mesh(geom(w, h, d), material); m.position.set(x, y, z); m.rotation.y = ry; return addM(m) }
       const planeM = (w, h, material, x, y, z, rx = 0, ry = 0) => { const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), material); m.position.set(x, y, z); m.rotation.set(rx, ry, 0); return addM(m, false, true) }
+      const cyl = (rt, rb, h, material, x, y, z, seg = 18) => { const m = new THREE.Mesh(new THREE.CylinderGeometry(rt, rb, h, seg), material); m.position.set(x, y, z); return addM(m) }
+      // Silla de oficina (asiento + respaldo redondeados, poste y base de patas).
+      const officeChair = (x, z, ry) => {
+        const g = new THREE.Group(); const sm = mat(0x1b1e22, { roughness: 0.55 })
+        g.add(new THREE.Mesh(geom(0.52, 0.12, 0.52, 1.5), sm).translateY(0.5))
+        const back = new THREE.Mesh(geom(0.5, 0.64, 0.12, 1.5), sm); back.position.set(0, 0.86, -0.22); g.add(back)
+        g.add(new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.42, 12), M.frame).translateY(0.27))
+        g.add(new THREE.Mesh(new THREE.CylinderGeometry(0.26, 0.28, 0.05, 5), M.frame).translateY(0.05))
+        g.position.set(x, 0, z); g.rotation.y = ry
+        g.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true } })
+        grp.add(g); return g
+      }
 
       const totalZ = HALL_Z1 - HALL_Z0
       const midZ = (HALL_Z0 + HALL_Z1) / 2
@@ -190,7 +212,7 @@
       planeM(X_R - X_LBACK, H, M.wood, (X_R + X_LBACK) / 2 + 1.5, H / 2, HALL_Z0 + 0.02, 0, 0) // muro de madera
       { const sign = imgSign(logoLightUrl, 3.7, 1.0); sign.position.set(-1.2, 2.0, HALL_Z0 + 0.06); grp.add(sign) }
       { // mostrador de mármol
-        const counter = new THREE.Mesh(new THREE.BoxGeometry(3.4, 1.05, 0.9), mat(0xd9dde2, { roughness: 0.2 }))
+        const counter = new THREE.Mesh(geom(3.4, 1.05, 0.9), mat(0xd9dde2, { roughness: 0.18, envMapIntensity: 1.3 }))
         counter.position.set(-1.2, 0.525, HALL_Z0 + 1.5); counter.castShadow = counter.receiveShadow = true; grp.add(counter)
         box(3.6, 0.08, 1.05, M.deskTop, -1.2, 1.08, HALL_Z0 + 1.5)
       }
@@ -208,7 +230,7 @@
         // escritorio + silla dentro
         const desk = box(1.6, 0.9, 0.75, M.wood, X_L - 2.2, 0.45, zc, Math.PI / 2)
         box(1.75, 0.06, 0.9, M.deskTop, X_L - 2.2, 0.92, zc, Math.PI / 2)
-        const ch = new THREE.Group(); ch.add(new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.1, 0.5), M.dark).translateY(0.46)); ch.add(new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.55, 0.08), M.dark).translateY(0.75).translateZ(-0.22)); ch.position.set(X_L - 3.0, 0, zc); ch.rotation.y = Math.PI / 2; grp.add(ch)
+        officeChair(X_L - 3.0, zc, Math.PI / 2)
         // detalle interior: monitor, planta de esquina, diploma en la pared
         box(0.5, 0.3, 0.04, M.dark, X_L - 2.4, 1.18, zc, Math.PI / 2)
         box(0.14, 0.16, 0.1, M.dark, X_L - 2.3, 1.0, zc)
@@ -350,7 +372,9 @@
           import('three/examples/jsm/postprocessing/UnrealBloomPass.js'),
           import('three/examples/jsm/postprocessing/OutputPass.js'),
         ])
-        composer = new EffectComposer(renderer); composer.addPass(new RenderPass(scene, camera))
+        // render target multisampleado → antialiasing MSAA (elimina el dentado "N64")
+        const rt = new THREE.WebGLRenderTarget(innerWidth, innerHeight, { samples: 2 })
+        composer = new EffectComposer(renderer, rt); composer.addPass(new RenderPass(scene, camera))
         composer.addPass(new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.32, 0.6, 0.85)); composer.addPass(new OutputPass())
       } catch { composer = null }
       addEventListener('resize', resize); resize()
