@@ -11,8 +11,12 @@
   import laptopUrl from '$lib/assets/demo/models/laptop.glb?url'
   import artAbstractUrl from '$lib/assets/demo/art/art-abstract.webp'
   import artCourthouseUrl from '$lib/assets/demo/art/art-courthouse.webp'
+  import artLandscapeUrl from '$lib/assets/demo/art/art-landscape.webp'
+  import artLibraryUrl from '$lib/assets/demo/art/art-library.webp'
   import chairExecUrl from '$lib/assets/demo/models/chair_exec.glb?url'
   import chairLoungeUrl from '$lib/assets/demo/models/chair_lounge.glb?url'
+  import bookshelfUrl from '$lib/assets/demo/models/bookshelf.glb?url'
+  import sofaUrl from '$lib/assets/demo/models/sofa.glb?url'
 
   let { cityUrl = '', envUrl = '' } = $props()
 
@@ -88,7 +92,7 @@
       let RoundedBoxGeometry = null
       try { ({ RoundedBoxGeometry } = await import('three/examples/jsm/geometries/RoundedBoxGeometry.js')) } catch { RoundedBoxGeometry = null }
       // Modelos 3D foto-reales (Higgsfield) — carga diferida con meshopt.
-      let GLB = { monstera: null, lamp: null, laptop: null, chairExec: null, chairLounge: null }
+      let GLB = { monstera: null, lamp: null, laptop: null, chairExec: null, chairLounge: null, bookshelf: null, sofa: null }
       try {
         const [{ GLTFLoader }, { MeshoptDecoder }] = await Promise.all([
           import('three/examples/jsm/loaders/GLTFLoader.js'),
@@ -96,9 +100,9 @@
         ])
         const loader = new GLTFLoader(); loader.setMeshoptDecoder(MeshoptDecoder)
         const load = (url) => new Promise((res) => loader.load(url, (g) => res(g.scene), undefined, () => res(null)))
-        const [mo, la, lp, ce, cl] = await Promise.all([load(monsteraUrl), load(lampUrl), load(laptopUrl), load(chairExecUrl), load(chairLoungeUrl)])
+        const [mo, la, lp, ce, cl, bs, so] = await Promise.all([load(monsteraUrl), load(lampUrl), load(laptopUrl), load(chairExecUrl), load(chairLoungeUrl), load(bookshelfUrl), load(sofaUrl)])
         if (cancelled) return
-        GLB = { monstera: mo, lamp: la, laptop: lp, chairExec: ce, chairLounge: cl }
+        GLB = { monstera: mo, lamp: la, laptop: lp, chairExec: ce, chairLounge: cl, bookshelf: bs, sofa: so }
       } catch { /* sin modelos GLB */ }
 
       let renderer
@@ -320,15 +324,19 @@
       // --- recepción (fondo) -------------------------------------------------
       planeM(X_R - X_LBACK, H, M.wood, (X_R + X_LBACK) / 2 + 1.5, H / 2, HALL_Z0 + 0.02, 0, 0) // muro de madera
       { const sign = imgSign(logoLightUrl, 3.7, 1.0); sign.position.set(-1.2, 2.0, HALL_Z0 + 0.06); grp.add(sign) }
+      wallArt(artLibraryUrl, 0.64, 0.8, 2.4, 1.6, HALL_Z0 + 0.07, 0)      // cuadros flanqueando el logo
+      wallArt(artLandscapeUrl, 0.64, 0.8, -4.5, 1.6, HALL_Z0 + 0.07, 0)
       { // mostrador de mármol
         const counter = new THREE.Mesh(geom(3.4, 1.05, 0.9), mat(0xd9dde2, { roughness: 0.18, envMapIntensity: 1.3 }))
         counter.position.set(-1.2, 0.525, HALL_Z0 + 1.5); counter.castShadow = counter.receiveShadow = true; grp.add(counter)
         box(3.6, 0.08, 1.05, M.deskTop, -1.2, 1.08, HALL_Z0 + 1.5)
       }
+      // sofá de espera junto al ventanal de la recepción
+      placeModel(GLB.sofa, X_R - 0.95, HALL_Z0 + 3.2, 0.78, 0, -Math.PI / 2)
 
       // --- oficinas (lado izquierdo) -----------------------------------------
       const proxPoints = []
-      const artUrls = [artAbstractUrl, artCourthouseUrl]
+      const artUrls = [artAbstractUrl, artCourthouseUrl, artLandscapeUrl, artLibraryUrl]
       let artIdx = 0
       for (const s of STATIONS.filter((x) => x.type === 'office')) {
         const zc = s.z, hd = 1.55
@@ -364,12 +372,14 @@
         planeM(2 * hd, H, M.glass, X_L, H / 2, zc, 0, Math.PI / 2)
         box(0.06, H, 0.06, M.frame, X_L, H / 2, zc - hd)
         box(0.06, H, 0.06, M.frame, X_L, H / 2, zc + hd)
-        // estanterías llenas de libros en la pared del fondo (dos cuerpos)
-        const cols = [0x6b4a2b, 0x355c7d, 0x99403a, 0x3f6f4f, 0x7a5aa0, 0x9c6b2e]
-        for (const zz of [zc - 0.72, zc + 0.72]) {
-          box(0.5, 2.5, 1.3, M.wood, X_LBACK + 0.3, 1.25, zz)
-          for (let i = 0; i < 5; i++) box(0.42, 0.07, 1.2, M.deskTop, X_LBACK + 0.3, 0.5 + i * 0.5, zz)
-          for (let i = 0; i < 5; i++) for (let j = 0; j < 5; j++) box(0.16, 0.38, 0.13, mat(cols[(i + j) % cols.length]), X_LBACK + 0.5, 0.72 + i * 0.5, zz - 0.5 + j * 0.26)
+        // librería 3D contra la pared del fondo (fallback: estanterías procedurales)
+        if (!placeModel(GLB.bookshelf, X_LBACK + 0.42, zc, 2.25, 0, Math.PI / 2)) {
+          const cols = [0x6b4a2b, 0x355c7d, 0x99403a, 0x3f6f4f, 0x7a5aa0, 0x9c6b2e]
+          for (const zz of [zc - 0.72, zc + 0.72]) {
+            box(0.5, 2.5, 1.3, M.wood, X_LBACK + 0.3, 1.25, zz)
+            for (let i = 0; i < 5; i++) box(0.42, 0.07, 1.2, M.deskTop, X_LBACK + 0.3, 0.5 + i * 0.5, zz)
+            for (let i = 0; i < 5; i++) for (let j = 0; j < 5; j++) box(0.16, 0.38, 0.13, mat(cols[(i + j) % cols.length]), X_LBACK + 0.5, 0.72 + i * 0.5, zz - 0.5 + j * 0.26)
+          }
         }
         // alfombra + mesa de lectura central + dos sillones enfrentados
         box(2.4, 0.03, 2.0, mat(0x6f3b34, { roughness: 0.95 }), X_LBACK + 2.7, 0.015, zc)
