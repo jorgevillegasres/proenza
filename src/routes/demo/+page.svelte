@@ -1,7 +1,7 @@
 <script>
   import Seo from '$lib/components/Seo.svelte'
   import OfficeDemo from '$lib/demo/OfficeDemo.svelte'
-  import cityUrl from '$lib/assets/demo/city.jpg'
+  import cityUrl from '$lib/assets/demo/city.webp'
   import envUrl from '$lib/assets/demo/office-env.jpg'
 </script>
 

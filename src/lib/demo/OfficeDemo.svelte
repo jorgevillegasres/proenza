@@ -123,7 +123,7 @@
 
       let renderer
       try { renderer = new THREE.WebGLRenderer({ canvas, antialias: true }); if (!renderer.getContext()) throw 0 } catch { failed = true; return }
-      renderer.setPixelRatio(Math.min(devicePixelRatio, 2))
+      renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5)) // tope 1.5 → más fluidez en pantallas HiDPI
       renderer.shadowMap.enabled = true
       renderer.shadowMap.type = THREE.PCFSoftShadowMap
       renderer.toneMapping = THREE.ACESFilmicToneMapping
@@ -257,7 +257,7 @@
       // --- ventanal derecho con la ciudad (vista real; skyline ilustrado de respaldo)
       const cityMat = new THREE.MeshBasicMaterial({ color: 0xbcd3e6 })
       if (cityUrl) {
-        const t = new THREE.TextureLoader().load(cityUrl); t.colorSpace = THREE.SRGBColorSpace; t.wrapS = THREE.RepeatWrapping; t.repeat.x = 2.5; cityMat.map = t
+        const t = new THREE.TextureLoader().load(cityUrl); t.colorSpace = THREE.SRGBColorSpace; t.wrapS = THREE.MirroredRepeatWrapping; t.repeat.x = 1.5; t.anisotropy = 8; cityMat.map = t
       } else {
         const skyTex = mkTex((g, s) => {
           const grad = g.createLinearGradient(0, 0, 0, s)
@@ -273,9 +273,10 @@
       }
       planeM(totalZ * 2.4, H * 1.7, cityMat, X_R + 3, H / 2 + 0.2, midZ, 0, -Math.PI / 2)
       planeM(totalZ, H, M.glass, X_R - 0.02, H / 2, midZ, 0, -Math.PI / 2)
-      for (let z = HALL_Z0; z <= HALL_Z1; z += 2.2) box(0.07, H, 0.07, M.frame, X_R - 0.03, H / 2, z)
-      planeM(totalZ, 0.14, M.frame, X_R - 0.03, 0.07, midZ, -Math.PI / 2)
-      planeM(totalZ, 0.14, M.frame, X_R - 0.03, H - 0.07, midZ, -Math.PI / 2)
+      const mullion = mat(0x9aa0a6, { metalness: 0.55, roughness: 0.45, envMapIntensity: 1.2 }) // aluminio claro
+      for (let z = HALL_Z0; z <= HALL_Z1; z += 2.8) box(0.05, H, 0.05, mullion, X_R - 0.03, H / 2, z)
+      planeM(totalZ, 0.1, mullion, X_R - 0.03, 0.06, midZ, -Math.PI / 2)
+      planeM(totalZ, 0.1, mullion, X_R - 0.03, H - 0.06, midZ, -Math.PI / 2)
 
       // --- luces de techo ----------------------------------------------------
       for (let z = HALL_Z0 + 2; z < HALL_Z1; z += 3.2) {
@@ -289,7 +290,7 @@
       box(X_R - X_LBACK, 0.05, 0.08, cove, (X_R + X_LBACK) / 2, H - 0.13, HALL_Z0 + 0.22)
       box(X_R - X_LBACK, 0.05, 0.08, cove, (X_R + X_LBACK) / 2, H - 0.13, HALL_Z1 - 0.22)
       const day = new THREE.DirectionalLight(0xfff2dc, 1.45); day.position.set(14, 16, 8); day.castShadow = true
-      day.shadow.mapSize.set(2048, 2048); day.shadow.camera.near = 1; day.shadow.camera.far = 80
+      day.shadow.mapSize.set(1024, 1024); day.shadow.camera.near = 1; day.shadow.camera.far = 80
       Object.assign(day.shadow.camera, { left: -16, right: 16, top: 14, bottom: -14 }); day.shadow.bias = -0.0005; day.shadow.radius = 6
       grp.add(day, day.target)
       // relleno sutil (la oclusión ambiental GTAO aporta la profundidad)
@@ -509,14 +510,14 @@
         ])
         // render target multisampleado → antialiasing MSAA (elimina el dentado "N64")
         const lowEnd = matchMedia('(pointer: coarse)').matches || innerWidth < 820
-        const rt = new THREE.WebGLRenderTarget(innerWidth, innerHeight, { samples: lowEnd ? 2 : 4 })
+        const rt = new THREE.WebGLRenderTarget(innerWidth, innerHeight, { samples: 2 })
         composer = new EffectComposer(renderer, rt); composer.addPass(new RenderPass(scene, camera))
         // oclusión ambiental GTAO → profundidad y sombras de contacto (lo más impactante)
         if (!lowEnd) {
           try {
             const { GTAOPass } = await import('three/examples/jsm/postprocessing/GTAOPass.js')
             const gtao = new GTAOPass(scene, camera, innerWidth, innerHeight)
-            try { gtao.updateGtaoMaterial({ radius: 0.45, scale: 1.1, samples: 16 }) } catch { /* defaults */ }
+            try { gtao.updateGtaoMaterial({ radius: 0.4, scale: 1.0, samples: 8 }) } catch { /* defaults */ }
             composer.addPass(gtao)
           } catch { /* sin GTAO */ }
         }
@@ -555,11 +556,11 @@
           if (keys.has('s') || keys.has('arrowdown')) mz -= 1
           if (keys.has('a') || keys.has('arrowleft')) turn += 1
           if (keys.has('d') || keys.has('arrowright')) turn -= 1
-          yaw += turn * 1.9 * dt
+          yaw += turn * 2.3 * dt
           camera.rotation.order = 'YXZ'; camera.rotation.y = yaw; camera.rotation.x = pitch
           fwd.set(-Math.sin(yaw), 0, -Math.cos(yaw))
           if (mz !== 0) {
-            cpos.addScaledVector(fwd, mz * 3.4 * dt)
+            cpos.addScaledVector(fwd, mz * 4.4 * dt)
             cpos.x = Math.max(X_L + 0.5, Math.min(X_R - 0.5, cpos.x))
             cpos.z = Math.max(HALL_Z0 + 1.2, Math.min(HALL_Z1 - 0.6, cpos.z))
             stepTimer += dt
