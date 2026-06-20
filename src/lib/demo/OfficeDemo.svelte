@@ -9,6 +9,10 @@
   import monsteraUrl from '$lib/assets/demo/models/monstera.glb?url'
   import lampUrl from '$lib/assets/demo/models/lamp.glb?url'
   import laptopUrl from '$lib/assets/demo/models/laptop.glb?url'
+  import artAbstractUrl from '$lib/assets/demo/art/art-abstract.webp'
+  import artCourthouseUrl from '$lib/assets/demo/art/art-courthouse.webp'
+  import chairExecUrl from '$lib/assets/demo/models/chair_exec.glb?url'
+  import chairLoungeUrl from '$lib/assets/demo/models/chair_lounge.glb?url'
 
   let { cityUrl = '', envUrl = '' } = $props()
 
@@ -84,7 +88,7 @@
       let RoundedBoxGeometry = null
       try { ({ RoundedBoxGeometry } = await import('three/examples/jsm/geometries/RoundedBoxGeometry.js')) } catch { RoundedBoxGeometry = null }
       // Modelos 3D foto-reales (Higgsfield) — carga diferida con meshopt.
-      let GLB = { monstera: null, lamp: null, laptop: null }
+      let GLB = { monstera: null, lamp: null, laptop: null, chairExec: null, chairLounge: null }
       try {
         const [{ GLTFLoader }, { MeshoptDecoder }] = await Promise.all([
           import('three/examples/jsm/loaders/GLTFLoader.js'),
@@ -92,9 +96,9 @@
         ])
         const loader = new GLTFLoader(); loader.setMeshoptDecoder(MeshoptDecoder)
         const load = (url) => new Promise((res) => loader.load(url, (g) => res(g.scene), undefined, () => res(null)))
-        const [mo, la, lp] = await Promise.all([load(monsteraUrl), load(lampUrl), load(laptopUrl)])
+        const [mo, la, lp, ce, cl] = await Promise.all([load(monsteraUrl), load(lampUrl), load(laptopUrl), load(chairExecUrl), load(chairLoungeUrl)])
         if (cancelled) return
-        GLB = { monstera: mo, lamp: la, laptop: lp }
+        GLB = { monstera: mo, lamp: la, laptop: lp, chairExec: ce, chairLounge: cl }
       } catch { /* sin modelos GLB */ }
 
       let renderer
@@ -294,6 +298,14 @@
         const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace
         return new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshStandardMaterial({ map: tex, transparent: true, roughness: 0.85, side: THREE.DoubleSide }))
       }
+      // Cuadro de pared: plano texturizado con la obra enmarcada (la imagen ya trae marco).
+      const _artTex = {}
+      const wallArt = (url, w, h, x, y, z, ry) => {
+        let tex = _artTex[url]
+        if (!tex) { tex = new THREE.TextureLoader().load(url); tex.colorSpace = THREE.SRGBColorSpace; _artTex[url] = tex }
+        const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshStandardMaterial({ map: tex, roughness: 0.65 }))
+        m.position.set(x, y, z); m.rotation.y = ry; return addM(m, false, true)
+      }
       // Letrero a partir de una imagen (el logo) — retroiluminado.
       const imgSign = (url, w, h) => {
         const c = document.createElement('canvas'); c.width = 1024; c.height = Math.round((1024 * h) / w)
@@ -316,6 +328,8 @@
 
       // --- oficinas (lado izquierdo) -----------------------------------------
       const proxPoints = []
+      const artUrls = [artAbstractUrl, artCourthouseUrl]
+      let artIdx = 0
       for (const s of STATIONS.filter((x) => x.type === 'office')) {
         const zc = s.z, hd = 1.55
         // particiones laterales de vidrio esmerilado (premium, abre el pasillo)
@@ -330,12 +344,12 @@
         // escritorio + silla dentro
         const desk = box(1.6, 0.9, 0.75, M.wood, X_L - 2.2, 0.45, zc, Math.PI / 2)
         box(1.75, 0.06, 0.9, M.deskTop, X_L - 2.2, 0.92, zc, Math.PI / 2)
-        officeChair(X_L - 3.0, zc, Math.PI / 2)
+        if (!placeModel(GLB.chairExec, X_L - 3.0, zc, 1.18, 0, Math.PI / 2)) officeChair(X_L - 3.0, zc, Math.PI / 2)
         // portátil + lámpara de diseño sobre el escritorio; Monstera en la esquina
         if (!placeModel(GLB.laptop, X_L - 2.2, zc, 0.21, 0.95, Math.PI / 2)) { box(0.5, 0.3, 0.04, M.dark, X_L - 2.4, 1.18, zc, Math.PI / 2); box(0.14, 0.16, 0.1, M.dark, X_L - 2.3, 1.0, zc) }
         placeModel(GLB.lamp, X_L - 2.7, zc + 0.6, 0.5, 0.95, -0.6)
         if (!placeModel(GLB.monstera, X_LBACK + 0.75, zc + 1.05, 1.1, 0, 0.6)) plant(X_LBACK + 0.55, zc + 1.05, 0.92)
-        box(0.45, 0.6, 0.04, mat(0xc6a05a, { metalness: 0.25, roughness: 0.4 }), X_LBACK + 0.05, 1.75, zc - 0.7, Math.PI / 2)
+        wallArt(artUrls[artIdx++ % artUrls.length], 0.62, 0.78, X_LBACK + 0.05, 1.7, zc - 0.7, Math.PI / 2)
         // nombre en vinilo esmerilado sobre el cristal del frente (señalética integrada)
         const band = etchedSign(s.label, s.sub, 2.5, 0.62)
         band.position.set(X_L + 0.03, 1.5, zc); band.rotation.y = Math.PI / 2; grp.add(band)
@@ -361,7 +375,7 @@
         box(2.4, 0.03, 2.0, mat(0x6f3b34, { roughness: 0.95 }), X_LBACK + 2.7, 0.015, zc)
         box(1.3, 0.45, 0.8, M.wood, X_LBACK + 2.7, 0.42, zc)
         box(1.4, 0.05, 0.9, M.deskTop, X_LBACK + 2.7, 0.66, zc)
-        for (const dz of [-1.0, 1.0]) armchair(X_LBACK + 2.7, zc + dz, dz < 0 ? 0 : Math.PI, 0x3a414b)
+        for (const dz of [-1.0, 1.0]) { if (!placeModel(GLB.chairLounge, X_LBACK + 2.7, zc + dz, 0.84, 0, dz < 0 ? 0 : Math.PI)) armchair(X_LBACK + 2.7, zc + dz, dz < 0 ? 0 : Math.PI, 0x3a414b) }
         // lámpara de pie en la esquina (poste cilíndrico + pantalla)
         cyl(0.025, 0.032, 1.5, M.frame, X_LBACK + 0.7, 0.75, zc + hd - 0.3, 12)
         cyl(0.13, 0.16, 0.06, M.frame, X_LBACK + 0.7, 0.04, zc + hd - 0.3, 18) // base
@@ -376,7 +390,7 @@
       {
         const zc = 8.8
         box(2.2, 0.03, 1.8, mat(0x4a4640, { roughness: 0.95 }), X_R - 1.2, 0.015, zc) // alfombra
-        for (const dz of [-0.78, 0.78]) armchair(X_R - 1.0, zc + dz, dz < 0 ? 0 : Math.PI, 0x2c3138) // enfrentados, junto al ventanal
+        for (const dz of [-0.78, 0.78]) { if (!placeModel(GLB.chairLounge, X_R - 1.0, zc + dz, 0.84, 0, dz < 0 ? 0 : Math.PI)) armchair(X_R - 1.0, zc + dz, dz < 0 ? 0 : Math.PI, 0x2c3138) } // enfrentados, junto al ventanal
         box(0.6, 0.4, 0.6, M.wood, X_R - 1.0, 0.2, zc)             // mesa de centro
         if (!placeModel(GLB.monstera, X_R - 1.7, zc - 1.5, 1.35, 0, 0.3)) plant(X_R - 1.7, zc - 1.5, 1.2)
       }
