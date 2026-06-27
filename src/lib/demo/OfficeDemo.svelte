@@ -107,6 +107,9 @@
       if (cancelled) return
       let RoundedBoxGeometry = null
       try { ({ RoundedBoxGeometry } = await import('three/examples/jsm/geometries/RoundedBoxGeometry.js')) } catch { RoundedBoxGeometry = null }
+      let Reflector = null
+      try { ({ Reflector } = await import('three/examples/jsm/objects/Reflector.js')) } catch { Reflector = null }
+      const lowEnd = matchMedia('(pointer: coarse)').matches || innerWidth < 820
       // Modelos 3D foto-reales (Higgsfield) — carga diferida con meshopt.
       let GLB = { monstera: null, lamp: null, laptop: null, chairExec: null, chairLounge: null, bookshelf: null, sofa: null }
       try {
@@ -127,7 +130,7 @@
       renderer.shadowMap.enabled = true
       renderer.shadowMap.type = THREE.PCFSoftShadowMap
       renderer.toneMapping = THREE.ACESFilmicToneMapping
-      renderer.toneMappingExposure = 0.82
+      renderer.toneMappingExposure = 0.9
 
       const scene = new THREE.Scene()
       scene.background = new THREE.Color(0xe6e8e9)
@@ -242,9 +245,19 @@
 
       const totalZ = HALL_Z1 - HALL_Z0
       const midZ = (HALL_Z0 + HALL_Z1) / 2
-      // piso + techo
-      planeM(X_R - X_LBACK + 4, totalZ, M.floor, (X_R + X_LBACK) / 2, 0, midZ, -Math.PI / 2)
-      planeM(X_R - X_LBACK + 4, totalZ, M.ceil, (X_R + X_LBACK) / 2, H, midZ, Math.PI / 2)
+      // piso reflectante (Reflector) + capa de pulido translúcida; techo
+      const FW = X_R - X_LBACK + 4, FX = (X_R + X_LBACK) / 2
+      let reflector = null
+      if (!lowEnd && Reflector) {
+        try {
+          reflector = new Reflector(new THREE.PlaneGeometry(FW, totalZ), { textureWidth: 512, textureHeight: 512, color: 0x6a6f76, clipBias: 0.004 })
+          reflector.position.set(FX, 0, midZ); reflector.rotation.x = -Math.PI / 2; grp.add(reflector)
+          M.floor.transparent = true; M.floor.opacity = 0.66 // deja ver el reflejo difuminado
+          planeM(FW, totalZ, M.floor, FX, 0.004, midZ, -Math.PI / 2) // pulido encima
+        } catch { reflector = null }
+      }
+      if (!reflector) planeM(FW, totalZ, M.floor, FX, 0, midZ, -Math.PI / 2)
+      planeM(FW, totalZ, M.ceil, FX, H, midZ, Math.PI / 2)
       // pared de entrada (frente) y back-left
       planeM(X_R - X_LBACK, H, M.wall, (X_R + X_LBACK) / 2, H / 2, HALL_Z1, 0, Math.PI)
       planeM(X_R - X_LBACK, H, M.wall, (X_R + X_LBACK) / 2, H / 2, HALL_Z0 + 0.01, 0, 0)
@@ -289,13 +302,15 @@
       box(0.08, 0.05, totalZ, cove, X_R - 0.16, H - 0.13, midZ)
       box(X_R - X_LBACK, 0.05, 0.08, cove, (X_R + X_LBACK) / 2, H - 0.13, HALL_Z0 + 0.22)
       box(X_R - X_LBACK, 0.05, 0.08, cove, (X_R + X_LBACK) / 2, H - 0.13, HALL_Z1 - 0.22)
-      const day = new THREE.DirectionalLight(0xfff2dc, 1.45); day.position.set(14, 16, 8); day.castShadow = true
+      const day = new THREE.DirectionalLight(0xffe6c0, 1.5); day.position.set(16, 13, 9); day.castShadow = true // sol cálido de tarde
       day.shadow.mapSize.set(1024, 1024); day.shadow.camera.near = 1; day.shadow.camera.far = 80
       Object.assign(day.shadow.camera, { left: -16, right: 16, top: 14, bottom: -14 }); day.shadow.bias = -0.0005; day.shadow.radius = 6
       grp.add(day, day.target)
-      // relleno sutil (la oclusión ambiental GTAO aporta la profundidad)
-      grp.add(new THREE.HemisphereLight(0xfff4e6, 0xc8bca4, 0.35))
-      grp.add(new THREE.AmbientLight(0xffffff, 0.08))
+      // relleno cálido cielo/suelo (la GTAO aporta la profundidad)
+      grp.add(new THREE.HemisphereLight(0xffeede, 0xbfa988, 0.38))
+      grp.add(new THREE.AmbientLight(0xfff3e3, 0.08))
+      // luz dorada de borde desde el ventanal (sin sombra)
+      const golden = new THREE.DirectionalLight(0xffca7a, 0.35); golden.position.set(20, 5, -2); grp.add(golden, golden.target)
 
       // --- letrero de canvas reutilizable ------------------------------------
       const textSign = (line1, line2, w, h, em = 0xffe9c0) => {
@@ -509,7 +524,6 @@
           import('three/examples/jsm/postprocessing/OutputPass.js'),
         ])
         // render target multisampleado → antialiasing MSAA (elimina el dentado "N64")
-        const lowEnd = matchMedia('(pointer: coarse)').matches || innerWidth < 820
         const rt = new THREE.WebGLRenderTarget(innerWidth, innerHeight, { samples: 2 })
         composer = new EffectComposer(renderer, rt); composer.addPass(new RenderPass(scene, camera))
         // oclusión ambiental GTAO → profundidad y sombras de contacto (lo más impactante)
@@ -579,8 +593,8 @@
           const fm = focusMap[open.id]
           if (fm) {
             _dummy.position.copy(camera.position); _dummy.up.set(0, 1, 0); _dummy.lookAt(fm.look)
-            camera.quaternion.slerp(_dummy.quaternion, 1 - Math.pow(0.05, dt))
-            camera.position.lerp(fm.eye, 1 - Math.pow(0.03, dt))
+            camera.quaternion.slerp(_dummy.quaternion, 1 - Math.pow(0.08, dt))
+            camera.position.lerp(fm.eye, 1 - Math.pow(0.06, dt))
           }
         }
         if (composer) composer.render(); else renderer.render(scene, camera)
