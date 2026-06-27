@@ -31,6 +31,20 @@
   let toast = $state('')
   let stationsUI = $state([])
   let camYaw = $state(0) // para la brújula
+  let camX = $state(0) // posición del jugador (para el minimapa)
+  let camZ = $state(9.5)
+  // Estaciones en el plano del minimapa (coords del mundo x,z).
+  const MINI = [
+    { id: 'biblioteca', x: -4.5, z: 9.4 },
+    { id: 'harold-tabares', x: -4.5, z: 6.5 },
+    { id: 'edna-ramirez', x: -4.5, z: 3 },
+    { id: 'ivan-salazar', x: -4.5, z: -0.5 },
+    { id: 'jorge-villegas', x: -4.5, z: -4 },
+    { id: 'recepcion', x: -1.2, z: -8.5 },
+  ]
+  // Mapeo mundo→minimapa (W=70, H=120). x: [-7.5,2.2]; z: [-9.2,11].
+  const miX = (x) => ((x - -7.5) / (2.2 - -7.5)) * 70
+  const miY = (z) => ((z - -9.2) / (11 - -9.2)) * 120
   let soundOn = $state(false)
   let audioEl = null
   // Pasos sintetizados con WebAudio (ráfaga de ruido filtrado).
@@ -47,6 +61,25 @@
     const src = footCtx.createBufferSource(); src.buffer = buf
     const flt = footCtx.createBiquadFilter(); flt.type = 'lowpass'; flt.frequency.value = 360
     const g = footCtx.createGain(); g.gain.setValueAtTime(0.15, t)
+    src.connect(flt); flt.connect(g); g.connect(footCtx.destination); src.start(t)
+  }
+  // Click suave de UI.
+  function playClick() {
+    if (!footCtx || !soundOn) return
+    const t = footCtx.currentTime
+    const o = footCtx.createOscillator(); o.type = 'triangle'; o.frequency.setValueAtTime(660, t); o.frequency.exponentialRampToValueAtTime(990, t + 0.05)
+    const g = footCtx.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.06, t + 0.008); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.12)
+    o.connect(g); g.connect(footCtx.destination); o.start(t); o.stop(t + 0.13)
+  }
+  // "Puerta"/whoosh al entrar a una estación.
+  function playEnter() {
+    if (!footCtx || !soundOn) return
+    const t = footCtx.currentTime, len = Math.floor(footCtx.sampleRate * 0.45)
+    const buf = footCtx.createBuffer(1, len, footCtx.sampleRate); const d = buf.getChannelData(0)
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 1.5)
+    const src = footCtx.createBufferSource(); src.buffer = buf
+    const flt = footCtx.createBiquadFilter(); flt.type = 'bandpass'; flt.frequency.setValueAtTime(180, t); flt.frequency.exponentialRampToValueAtTime(900, t + 0.4); flt.Q.value = 0.7
+    const g = footCtx.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.12, t + 0.08); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.45)
     src.connect(flt); flt.connect(g); g.connect(footCtx.destination); src.start(t)
   }
   function toggleSound() {
@@ -72,9 +105,10 @@
 
   function openStation(s) {
     open = s; sent = null; f = { nombre: '', contacto: '', fecha: '', mensaje: '' }
+    playEnter()
     if (s && !discovered.includes(s.id)) discovered = [...discovered, s.id]
   }
-  function closeStation() { open = null; sent = null }
+  function closeStation() { if (open) playClick(); open = null; sent = null }
   function showToast(msg) { toast = msg; setTimeout(() => (toast = msg === toast ? '' : toast), 3500) }
 
   // formularios
@@ -82,6 +116,7 @@
   let sent = $state(null) // null | 'whatsapp' | 'citaly'
   const citalyFor = (lawyer) => (lawyer && lawyer.citalyUrl) || site.citalyUrl || ''
   function agendarCitaly(lawyer) {
+    playClick()
     const url = citalyFor(lawyer)
     if (url) globalThis.open(url, '_blank', 'noopener')
     sent = 'citaly'
@@ -90,14 +125,14 @@
     e?.preventDefault()
     if (!f.nombre.trim() || !f.contacto.trim()) return
     const msg = `Hola, quiero agendar una cita con ${lawyer.name} (${lawyer.role}).\n• Nombre: ${f.nombre}\n• Contacto: ${f.contacto}\n• Fecha: ${f.fecha || '—'}\n` + (f.mensaje ? `• Detalle: ${f.mensaje}\n` : '')
-    globalThis.open(whatsappLink(msg), '_blank', 'noopener')
+    playClick(); globalThis.open(whatsappLink(msg), '_blank', 'noopener')
     sent = 'whatsapp'
   }
   function casoWhats(e) {
     e?.preventDefault()
     if (!f.nombre.trim() || !f.contacto.trim() || !f.mensaje.trim()) return
     const msg = `Hola, quiero dejar mi caso para análisis.\n• Nombre: ${f.nombre}\n• Contacto: ${f.contacto}\n• Caso: ${f.mensaje}\n`
-    globalThis.open(whatsappLink(msg), '_blank', 'noopener')
+    playClick(); globalThis.open(whatsappLink(msg), '_blank', 'noopener')
     sent = 'whatsapp'
   }
   let selPost = $state(null)
@@ -592,7 +627,7 @@
             if (soundOn && stepTimer >= 0.45) { stepTimer = 0; playFootstep() }
           } else stepTimer = 0.4
           cpos.y = eye; camera.position.copy(cpos)
-          camYaw = yaw
+          camYaw = yaw; camX = cpos.x; camZ = cpos.z
           // proximidad
           let best = null, bd = 2.6
           for (const p of proxPoints) { const d = Math.hypot(cpos.x - p.x, cpos.z - p.z); if (d < bd) { bd = d; best = p.s } }
@@ -667,6 +702,20 @@
 
   <div class="hint"><b>W/S</b> avanzar · <b>A/D</b> girar · arrastra para mirar</div>
   <div class="badge">PROENZA · despacho virtual</div>
+
+  <!-- minimapa -->
+  <div class="minimap">
+    <span class="mm-title">Plano · {discovered.length}/{MINI.length}</span>
+    <svg viewBox="-8 -8 86 136" aria-hidden="true">
+      <rect x="-6" y="-6" width="82" height="132" rx="9" class="mm-bg" />
+      {#each MINI as m}
+        <circle cx={miX(m.x)} cy={miY(m.z)} r={active?.id === m.id ? 5 : 3.4} class="mm-dot {discovered.includes(m.id) ? 'done' : ''} {active?.id === m.id ? 'active' : ''}" />
+      {/each}
+      <g transform={`translate(${miX(camX)} ${miY(camZ)}) rotate(${(-camYaw * 180) / Math.PI})`}>
+        <path d="M0,-6 L4.2,5 L0,2.4 L-4.2,5 Z" class="mm-player" />
+      </g>
+    </svg>
+  </div>
 
   <!-- brújula -->
   <div class="compass"><div class="dial" style={`transform: rotate(${-camYaw}rad)`}><span class="n">N</span><div class="needle"></div></div></div>
@@ -784,6 +833,14 @@
   .toast { position: absolute; left: 50%; top: 12%; transform: translateX(-50%); background: rgba(20,28,38,0.9); color: #fff; padding: 0.7rem 1.1rem; border-radius: 12px; font-size: 0.9rem; }
   .hint { position: absolute; right: 16px; bottom: 14px; color: #fff; font-size: 0.64rem; letter-spacing: 0.08em; text-align: right; text-shadow: 0 1px 4px rgba(0,0,0,0.5); }
   .badge { position: absolute; left: 16px; bottom: 14px; color: rgba(255,255,255,0.85); font-size: 0.64rem; letter-spacing: 0.08em; text-shadow: 0 1px 4px rgba(0,0,0,0.5); }
+  .minimap { position: absolute; top: 76px; left: 16px; width: 96px; padding: 8px 8px 6px; border-radius: 14px; background: rgba(10,17,28,0.82); border: 1px solid rgba(125,215,255,0.28); box-shadow: 0 10px 30px rgba(0,0,0,0.35); pointer-events: none; }
+  .mm-title { display: block; font-size: 0.56rem; letter-spacing: 0.14em; text-transform: uppercase; color: #7fd3ff; margin-bottom: 5px; text-align: center; }
+  .minimap svg { display: block; width: 100%; }
+  .mm-bg { fill: rgba(10,18,30,0.35); stroke: rgba(130,190,240,0.18); stroke-width: 1; }
+  .mm-dot { fill: rgba(180,200,220,0.35); stroke: rgba(255,255,255,0.15); stroke-width: 0.6; transition: r 0.2s; }
+  .mm-dot.done { fill: #5ad1a0; }
+  .mm-dot.active { fill: #7fd3ff; filter: drop-shadow(0 0 4px rgba(125,215,255,0.9)); }
+  .mm-player { fill: #ffd166; stroke: rgba(0,0,0,0.45); stroke-width: 0.6; }
   .compass { position: absolute; right: 18px; bottom: 44px; width: 52px; height: 52px; border-radius: 50%; background: rgba(20,28,38,0.5); backdrop-filter: blur(6px); border: 1px solid rgba(255,255,255,0.3); pointer-events: none; }
   .compass .dial { width: 100%; height: 100%; position: relative; }
   .compass .n { position: absolute; top: 2px; left: 50%; transform: translateX(-50%); color: #ffd166; font-size: 0.6rem; font-weight: 700; }
@@ -882,5 +939,6 @@
     .prompt { bottom: 17vh; font-size: 0.82rem; }
     .row { grid-template-columns: 1fr; }
     .grid { grid-template-columns: 1fr; }
+    .minimap { display: none; }
   }
 </style>
