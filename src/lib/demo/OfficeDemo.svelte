@@ -1,5 +1,6 @@
 <script>
   import { onMount } from 'svelte'
+  import { L, t, tRole, toggleLang, initLang } from '$lib/i18n.svelte.js'
   import { site, whatsappLink } from '$lib/data/site.js'
   import { abogados, initials } from '$lib/data/abogados.js'
   import { posts, formatDate } from '$lib/data/posts.js'
@@ -103,6 +104,10 @@
   ]
   stationsUI = STATIONS.map((s) => ({ id: s.id, label: s.label, type: s.type }))
 
+  onMount(initLang)
+  // Etiquetas de estación traducidas (reactivas al idioma).
+  const dispLabel = (s) => (!s ? '' : s.type === 'reception' ? t('st_reception') : s.type === 'library' ? t('st_library') : s.label)
+  const dispSub = (s) => (!s ? '' : s.type === 'reception' ? t('st_reception_sub') : s.type === 'library' ? t('st_library_sub') : tRole(s.sub))
   function openStation(s) {
     open = s; sent = null; f = { nombre: '', contacto: '', fecha: '', mensaje: '' }
     playEnter()
@@ -677,35 +682,35 @@
     </div>
   </header>
 
-  <!-- panel EXPLORE NUESTRO ESPACIO -->
+  <!-- panel EXPLORE -->
   <aside class="explore">
-    <h2>EXPLORE NUESTRO ESPACIO</h2>
-    <p class="poi">Puntos de interés:</p>
+    <h2>{t('explore_title')}</h2>
+    <p class="poi">{t('explore_poi')}</p>
     <ul>
       {#each stationsUI as s}
-        <li class:done={discovered.includes(s.id)}>{discovered.includes(s.id) ? '✓' : '○'} {s.label}</li>
+        <li class:done={discovered.includes(s.id)}>{discovered.includes(s.id) ? '✓' : '○'} {s.type === 'reception' ? t('st_reception') : s.type === 'library' ? t('st_library') : s.label}</li>
       {/each}
     </ul>
-    <p class="next">Descubiertos: <b>{discovered.length}/{stationsUI.length}</b></p>
+    <p class="next">{t('explore_discovered')} <b>{discovered.length}/{stationsUI.length}</b></p>
     {#if active}
-      <button class="cta" onclick={() => openStation(STATIONS.find((x) => x.id === active.id))}>ENTRAR · {active.label}</button>
+      <button class="cta" onclick={() => openStation(STATIONS.find((x) => x.id === active.id))}>{t('explore_enter')} · {dispLabel(active)}</button>
     {:else}
-      <span class="cta ghost">Acércate a una zona…</span>
+      <span class="cta ghost">{t('explore_ghost')}</span>
     {/if}
   </aside>
 
   {#if active && !open}
-    <div class="prompt"><span class="key">E</span> {active.label}{#if active.sub} · <small>{active.sub}</small>{/if}</div>
+    <div class="prompt"><span class="key">E</span> {dispLabel(active)}{#if active.sub} · <small>{dispSub(active)}</small>{/if}</div>
   {/if}
 
   {#if toast}<div class="toast">{toast}</div>{/if}
 
-  <div class="hint"><b>W/S</b> avanzar · <b>A/D</b> girar · arrastra para mirar</div>
-  <div class="badge">PROENZA · despacho virtual</div>
+  <div class="hint"><b>W/S</b> {t('hint_controls_a')} · <b>A/D</b> {t('hint_controls_b')} · {t('hint_controls_c')}</div>
+  <div class="badge">{t('badge')}</div>
 
   <!-- minimapa -->
   <div class="minimap">
-    <span class="mm-title">Plano · {discovered.length}/{MINI.length}</span>
+    <span class="mm-title">{t('minimap')} · {discovered.length}/{MINI.length}</span>
     <svg viewBox="-8 -8 86 136" aria-hidden="true">
       <rect x="-6" y="-6" width="82" height="132" rx="9" class="mm-bg" />
       {#each MINI as m}
@@ -721,6 +726,8 @@
   <div class="compass"><div class="dial" style={`transform: rotate(${-camYaw}rad)`}><span class="n">N</span><div class="needle"></div></div></div>
   <!-- sonido -->
   <button class="sound" onclick={toggleSound} aria-label={soundOn ? 'Silenciar' : 'Activar sonido'}>{soundOn ? '🔊' : '🔈'}</button>
+  <!-- idioma -->
+  <button class="lang" onclick={toggleLang} aria-label="Cambiar idioma / Switch language">{L.lang === 'es' ? 'EN' : 'ES'}</button>
 
   <!-- controles táctiles -->
   <div class="mctrl">
@@ -742,8 +749,8 @@
         <span class="hud tl"></span><span class="hud tr"></span><span class="hud bl"></span><span class="hud br"></span>
         <div class="sheet-head">
           <div class="titles">
-            <span class="eyebrow">{open.type === 'office' ? 'Proenza · Agenda' : open.type === 'reception' ? 'Proenza · Casos' : 'Proenza · Biblioteca'}</span>
-            <h3>{open.type === 'office' ? 'Agenda tu cita' : open.type === 'reception' ? 'Deja tu caso' : 'Biblioteca jurídica'}</h3>
+            <span class="eyebrow">{open.type === 'office' ? t('eyebrow_office') : open.type === 'reception' ? t('eyebrow_reception') : t('eyebrow_library')}</span>
+            <h3>{open.type === 'office' ? t('title_office') : open.type === 'reception' ? t('title_reception') : t('title_library')}</h3>
           </div>
           <button class="x" onclick={closeStation} aria-label="Cerrar">✕</button>
         </div>
@@ -751,54 +758,54 @@
           {#if open.type === 'office'}
             <div class="law">
               {#if open.lawyer.photo}<img class="avatar" src={open.lawyer.photo} alt={open.lawyer.name} />{:else}<span class="mono">{initials(open.lawyer.name)}</span>{/if}
-              <div><b>{open.lawyer.name}</b><small>{open.lawyer.role}</small></div>
+              <div><b>{open.lawyer.name}</b><small>{tRole(open.lawyer.role)}</small></div>
             </div>
-            <p>{open.lawyer.bio}</p>
+            <p>{L.lang === 'en' ? open.lawyer.bio_en || open.lawyer.bio : open.lawyer.bio}</p>
             {#if sent}
               <div class="confirm">
                 <span class="confirm-ic"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7" /></svg></span>
-                <b>{sent === 'citaly' ? '¡Te abrimos la agenda!' : '¡Solicitud lista!'}</b>
-                <p>{sent === 'citaly' ? 'Elige tu horario en la pestaña de Citaly que acabamos de abrir. Si no se abrió, escríbenos al ' + site.phone + '.' : 'Te llevamos a WhatsApp para confirmar. Si no se abrió, escríbenos al ' + site.phone + '.'}</p>
-                <button class="send alt" type="button" onclick={closeStation}>Cerrar</button>
+                <b>{sent === 'citaly' ? t('confirm_citaly_t') : t('confirm_whats_t')}</b>
+                <p>{(sent === 'citaly' ? t('confirm_citaly_msg') : t('confirm_whats_msg')) + site.phone + '.'}</p>
+                <button class="send alt" type="button" onclick={closeStation}>{t('confirm_close')}</button>
               </div>
             {:else}
               <button class="send" type="button" onclick={() => agendarCitaly(open.lawyer)}>
                 <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" /></svg>
-                Agendar en Citaly
+                {t('citaly_btn')}
               </button>
-              <div class="orline"><span>o solicita por WhatsApp</span></div>
+              <div class="orline"><span>{t('or_whatsapp')}</span></div>
               <form class="form" onsubmit={(e) => citaWhats(e, open.lawyer)}>
-                <div class="row"><label>Nombre<input bind:value={f.nombre} required /></label><label>Contacto<input bind:value={f.contacto} required placeholder="WhatsApp / correo" /></label></div>
-                <div class="row"><label>Fecha preferida<input type="date" bind:value={f.fecha} /></label><label>Detalle<input bind:value={f.mensaje} placeholder="opcional" /></label></div>
-                <button class="send alt" type="submit">Solicitar por WhatsApp</button>
+                <div class="row"><label>{t('l_name')}<input bind:value={f.nombre} required /></label><label>{t('l_contact')}<input bind:value={f.contacto} required placeholder={t('ph_contact')} /></label></div>
+                <div class="row"><label>{t('l_date')}<input type="date" bind:value={f.fecha} /></label><label>{t('l_detail')}<input bind:value={f.mensaje} placeholder={t('ph_optional')} /></label></div>
+                <button class="send alt" type="submit">{t('whatsapp_req')}</button>
               </form>
             {/if}
           {:else if open.type === 'reception'}
             {#if sent}
               <div class="confirm">
                 <span class="confirm-ic"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7" /></svg></span>
-                <b>¡Caso enviado!</b>
-                <p>Te llevamos a WhatsApp para que lo recibamos. Si no se abrió, escríbenos al {site.phone}.</p>
-                <button class="send alt" type="button" onclick={closeStation}>Cerrar</button>
+                <b>{t('confirm_case_t')}</b>
+                <p>{t('confirm_case_msg') + site.phone + '.'}</p>
+                <button class="send alt" type="button" onclick={closeStation}>{t('confirm_close')}</button>
               </div>
             {:else}
-              <p>Cuéntanos tu situación y nuestro equipo la analiza para orientarte.</p>
+              <p>{t('reception_intro')}</p>
               <form class="form" onsubmit={casoWhats}>
-                <div class="row"><label>Nombre<input bind:value={f.nombre} required /></label><label>Contacto<input bind:value={f.contacto} required placeholder="WhatsApp / correo" /></label></div>
-                <label>Tu caso<textarea rows="4" bind:value={f.mensaje} required></textarea></label>
-                <button class="send" type="submit">Enviar caso por WhatsApp</button>
+                <div class="row"><label>{t('l_name')}<input bind:value={f.nombre} required /></label><label>{t('l_contact')}<input bind:value={f.contacto} required placeholder={t('ph_contact')} /></label></div>
+                <label>{t('l_case')}<textarea rows="4" bind:value={f.mensaje} required></textarea></label>
+                <button class="send" type="submit">{t('case_send')}</button>
               </form>
             {/if}
           {:else}
             {#if !selPost}
               <div class="grid">
                 {#each posts as p}
-                  <button class="card" onclick={() => (selPost = p)}><span class="tag">{p.area}</span><b>{p.title}</b><small>{formatDate(p.date)} · {p.readingMinutes} min</small></button>
+                  <button class="card" onclick={() => (selPost = p)}><span class="tag">{p.area}</span><b>{p.title}</b><small>{formatDate(p.date)} · {p.readingMinutes} {t('min')}</small></button>
                 {/each}
               </div>
             {:else}
               {@const A = selPost.component}
-              <button class="back" onclick={() => (selPost = null)}>← Biblioteca</button>
+              <button class="back" onclick={() => (selPost = null)}>{t('blog_back')}</button>
               <article class="prose"><h4>{selPost.title}</h4><A /></article>
             {/if}
           {/if}
@@ -846,6 +853,8 @@
   .compass .n { position: absolute; top: 2px; left: 50%; transform: translateX(-50%); color: #ffd166; font-size: 0.6rem; font-weight: 700; }
   .compass .needle { position: absolute; top: 9px; left: 50%; transform: translateX(-50%); width: 0; height: 0; border-left: 4px solid transparent; border-right: 4px solid transparent; border-bottom: 15px solid #e0533f; }
   .sound { position: absolute; right: 18px; bottom: 104px; width: 40px; height: 40px; border-radius: 50%; border: 1px solid rgba(255,255,255,0.3); background: rgba(20,28,38,0.5); backdrop-filter: blur(6px); color: #fff; font-size: 1rem; cursor: pointer; }
+  .lang { position: absolute; right: 18px; bottom: 152px; width: 40px; height: 40px; border-radius: 50%; border: 1px solid rgba(125,215,255,0.4); background: rgba(20,28,38,0.5); backdrop-filter: blur(6px); color: #cfe6f7; font: inherit; font-size: 0.72rem; font-weight: 700; letter-spacing: 0.04em; cursor: pointer; }
+  .lang:hover { background: rgba(125,215,255,0.18); }
   .mctrl { position: absolute; left: 16px; bottom: 40px; display: none; align-items: center; gap: 8px; z-index: 10; }
   .mctrl button { width: 50px; height: 50px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.3); background: rgba(20,28,38,0.5); backdrop-filter: blur(6px); color: #fff; font-size: 1.05rem; cursor: pointer; touch-action: none; user-select: none; display: grid; place-items: center; }
   .mctrl .mcol { display: grid; gap: 6px; }

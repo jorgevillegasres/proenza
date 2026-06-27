@@ -2,6 +2,7 @@
   import { onMount } from 'svelte'
   import Seo from '$lib/components/Seo.svelte'
   import OfficeDemo from '$lib/demo/OfficeDemo.svelte'
+  import { t, initLang } from '$lib/i18n.svelte.js'
   import { site } from '$lib/data/site.js'
   import cityUrl from '$lib/assets/demo/city.webp'
   import envUrl from '$lib/assets/demo/office-env.jpg'
@@ -10,6 +11,7 @@
   let entered = $state(false)
   let enterBtn = $state(null)
   onMount(() => {
+    initLang()
     const h = () => (entered = true)
     enterBtn?.addEventListener('click', h)
     return () => enterBtn?.removeEventListener('click', h)
@@ -23,14 +25,14 @@
 <div class="welcome" class:gone={entered}>
     <span class="hud tl"></span><span class="hud tr"></span><span class="hud bl"></span><span class="hud br"></span>
     <div class="w-inner">
-      <span class="eyebrow">Despacho jurídico · {site.city}</span>
+      <span class="eyebrow">{t('welcome_eyebrow')} · {site.city}</span>
       <img class="w-logo" src={logoLightUrl} alt={site.name} />
-      <p class="w-tag">{site.tagline}</p>
+      <p class="w-tag">{t('welcome_tag')}</p>
       <button class="w-enter" bind:this={enterBtn}>
-        Entrar al despacho
+        {t('welcome_enter')}
         <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6" /></svg>
       </button>
-      <span class="w-hint">Recorre el despacho en primera persona · W/S avanzar · A/D girar</span>
+      <span class="w-hint">{t('welcome_hint')}</span>
     </div>
   </div>
 
