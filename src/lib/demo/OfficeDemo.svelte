@@ -71,23 +71,34 @@
   stationsUI = STATIONS.map((s) => ({ id: s.id, label: s.label, type: s.type }))
 
   function openStation(s) {
-    open = s
+    open = s; sent = null; f = { nombre: '', contacto: '', fecha: '', mensaje: '' }
     if (s && !discovered.includes(s.id)) discovered = [...discovered, s.id]
   }
-  function closeStation() { open = null }
+  function closeStation() { open = null; sent = null }
   function showToast(msg) { toast = msg; setTimeout(() => (toast = msg === toast ? '' : toast), 3500) }
 
   // formularios
   let f = $state({ nombre: '', contacto: '', fecha: '', mensaje: '' })
+  let sent = $state(null) // null | 'whatsapp' | 'citaly'
+  const citalyFor = (lawyer) => (lawyer && lawyer.citalyUrl) || site.citalyUrl || ''
+  function agendarCitaly(lawyer) {
+    const url = citalyFor(lawyer)
+    if (url) globalThis.open(url, '_blank', 'noopener')
+    sent = 'citaly'
+  }
   function citaWhats(e, lawyer) {
     e?.preventDefault()
-    const msg = `Hola, quiero agendar una cita con ${lawyer.name} (${lawyer.role}).\n• Nombre: ${f.nombre || '—'}\n• Contacto: ${f.contacto || '—'}\n• Fecha: ${f.fecha || '—'}\n` + (f.mensaje ? `• Detalle: ${f.mensaje}\n` : '')
+    if (!f.nombre.trim() || !f.contacto.trim()) return
+    const msg = `Hola, quiero agendar una cita con ${lawyer.name} (${lawyer.role}).\n• Nombre: ${f.nombre}\n• Contacto: ${f.contacto}\n• Fecha: ${f.fecha || '—'}\n` + (f.mensaje ? `• Detalle: ${f.mensaje}\n` : '')
     globalThis.open(whatsappLink(msg), '_blank', 'noopener')
+    sent = 'whatsapp'
   }
   function casoWhats(e) {
     e?.preventDefault()
-    const msg = `Hola, quiero dejar mi caso para análisis.\n• Nombre: ${f.nombre || '—'}\n• Contacto: ${f.contacto || '—'}\n• Caso: ${f.mensaje || '—'}\n`
+    if (!f.nombre.trim() || !f.contacto.trim() || !f.mensaje.trim()) return
+    const msg = `Hola, quiero dejar mi caso para análisis.\n• Nombre: ${f.nombre}\n• Contacto: ${f.contacto}\n• Caso: ${f.mensaje}\n`
     globalThis.open(whatsappLink(msg), '_blank', 'noopener')
+    sent = 'whatsapp'
   }
   let selPost = $state(null)
 
@@ -694,18 +705,41 @@
               <div><b>{open.lawyer.name}</b><small>{open.lawyer.role}</small></div>
             </div>
             <p>{open.lawyer.bio}</p>
-            <form class="form" onsubmit={(e) => citaWhats(e, open.lawyer)}>
-              <div class="row"><label>Nombre<input bind:value={f.nombre} required /></label><label>Contacto<input bind:value={f.contacto} required placeholder="WhatsApp / correo" /></label></div>
-              <div class="row"><label>Fecha preferida<input type="date" bind:value={f.fecha} /></label><label>Detalle<input bind:value={f.mensaje} placeholder="opcional" /></label></div>
-              <button class="send" type="submit">Agendar por WhatsApp</button>
-            </form>
+            {#if sent}
+              <div class="confirm">
+                <span class="confirm-ic"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7" /></svg></span>
+                <b>{sent === 'citaly' ? '¡Te abrimos la agenda!' : '¡Solicitud lista!'}</b>
+                <p>{sent === 'citaly' ? 'Elige tu horario en la pestaña de Citaly que acabamos de abrir. Si no se abrió, escríbenos al ' + site.phone + '.' : 'Te llevamos a WhatsApp para confirmar. Si no se abrió, escríbenos al ' + site.phone + '.'}</p>
+                <button class="send alt" type="button" onclick={closeStation}>Cerrar</button>
+              </div>
+            {:else}
+              <button class="send" type="button" onclick={() => agendarCitaly(open.lawyer)}>
+                <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" /></svg>
+                Agendar en Citaly
+              </button>
+              <div class="orline"><span>o solicita por WhatsApp</span></div>
+              <form class="form" onsubmit={(e) => citaWhats(e, open.lawyer)}>
+                <div class="row"><label>Nombre<input bind:value={f.nombre} required /></label><label>Contacto<input bind:value={f.contacto} required placeholder="WhatsApp / correo" /></label></div>
+                <div class="row"><label>Fecha preferida<input type="date" bind:value={f.fecha} /></label><label>Detalle<input bind:value={f.mensaje} placeholder="opcional" /></label></div>
+                <button class="send alt" type="submit">Solicitar por WhatsApp</button>
+              </form>
+            {/if}
           {:else if open.type === 'reception'}
-            <p>Cuéntanos tu situación y nuestro equipo la analiza para orientarte.</p>
-            <form class="form" onsubmit={casoWhats}>
-              <div class="row"><label>Nombre<input bind:value={f.nombre} required /></label><label>Contacto<input bind:value={f.contacto} required placeholder="WhatsApp / correo" /></label></div>
-              <label>Tu caso<textarea rows="4" bind:value={f.mensaje} required></textarea></label>
-              <button class="send" type="submit">Enviar caso por WhatsApp</button>
-            </form>
+            {#if sent}
+              <div class="confirm">
+                <span class="confirm-ic"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7" /></svg></span>
+                <b>¡Caso enviado!</b>
+                <p>Te llevamos a WhatsApp para que lo recibamos. Si no se abrió, escríbenos al {site.phone}.</p>
+                <button class="send alt" type="button" onclick={closeStation}>Cerrar</button>
+              </div>
+            {:else}
+              <p>Cuéntanos tu situación y nuestro equipo la analiza para orientarte.</p>
+              <form class="form" onsubmit={casoWhats}>
+                <div class="row"><label>Nombre<input bind:value={f.nombre} required /></label><label>Contacto<input bind:value={f.contacto} required placeholder="WhatsApp / correo" /></label></div>
+                <label>Tu caso<textarea rows="4" bind:value={f.mensaje} required></textarea></label>
+                <button class="send" type="submit">Enviar caso por WhatsApp</button>
+              </form>
+            {/if}
           {:else}
             {#if !selPost}
               <div class="grid">
@@ -808,8 +842,18 @@
   input, textarea { font: inherit; font-size: 0.9rem; font-weight: 400; letter-spacing: normal; text-transform: none; color: #eaf3fb; padding: 0.65rem 0.8rem; border: 1px solid rgba(130,190,240,0.22); border-radius: 10px; background: rgba(8,16,30,0.5); transition: border-color 0.18s, box-shadow 0.18s; }
   input::placeholder, textarea::placeholder { color: #61748a; }
   input:focus, textarea:focus { outline: 0; border-color: rgba(125,215,255,0.8); box-shadow: 0 0 0 3px rgba(95,200,255,0.15), 0 0 16px rgba(80,180,255,0.2); }
-  .send { margin-top: 0.3rem; padding: 0.85rem; border: 1px solid rgba(160,225,255,0.5); border-radius: 999px; background: linear-gradient(180deg, rgba(110,205,255,0.95), rgba(70,150,235,0.95)); color: #04121f; font-weight: 700; letter-spacing: 0.04em; cursor: pointer; box-shadow: 0 6px 22px rgba(50,140,235,0.35), inset 0 1px 0 rgba(255,255,255,0.4); transition: transform 0.15s, box-shadow 0.15s; }
+  .send { display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem; width: 100%; margin-top: 0.3rem; padding: 0.85rem; border: 1px solid rgba(160,225,255,0.5); border-radius: 999px; background: linear-gradient(180deg, rgba(110,205,255,0.95), rgba(70,150,235,0.95)); color: #04121f; font: inherit; font-weight: 700; letter-spacing: 0.04em; cursor: pointer; box-shadow: 0 6px 22px rgba(50,140,235,0.35), inset 0 1px 0 rgba(255,255,255,0.4); transition: transform 0.15s, box-shadow 0.15s, background 0.18s; }
   .send:hover { transform: translateY(-1px); box-shadow: 0 10px 30px rgba(50,140,235,0.5), inset 0 1px 0 rgba(255,255,255,0.5); }
+  .send.alt { background: rgba(255,255,255,0.06); border-color: rgba(140,200,245,0.4); color: #cfe6f7; box-shadow: none; }
+  .send.alt:hover { background: rgba(125,215,255,0.16); transform: translateY(-1px); box-shadow: none; }
+  .orline { display: flex; align-items: center; gap: 0.7rem; margin: 1.1rem 0 0.4rem; color: #7e93a8; font-size: 0.64rem; letter-spacing: 0.14em; text-transform: uppercase; }
+  .orline span { white-space: nowrap; }
+  .orline::before, .orline::after { content: ''; flex: 1; height: 1px; background: rgba(130,190,240,0.18); }
+  .confirm { display: grid; justify-items: center; text-align: center; gap: 0.55rem; padding: 1.2rem 0.5rem 0.4rem; }
+  .confirm-ic { width: 54px; height: 54px; border-radius: 50%; display: grid; place-items: center; color: #7fffc4; border: 1.5px solid rgba(95,230,170,0.5); background: rgba(40,90,70,0.3); box-shadow: 0 0 24px rgba(60,220,150,0.25); }
+  .confirm b { font-family: 'Cormorant Garamond', Georgia, serif; font-size: 1.5rem; font-weight: 600; color: #f3f9ff; }
+  .confirm p { color: #b6c8da; font-size: 0.86rem; margin: 0; max-width: 360px; }
+  .confirm .send { width: auto; padding: 0.65rem 1.8rem; margin-top: 0.7rem; }
 
   .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.85rem; }
   .card { text-align: left; border: 1px solid rgba(130,190,240,0.2); background: linear-gradient(160deg, rgba(16,30,52,0.6), rgba(9,18,34,0.6)); border-radius: 14px; padding: 1rem 1.1rem; cursor: pointer; display: grid; gap: 0.35rem; color: #e9f3fb; transition: border-color 0.18s, transform 0.18s, box-shadow 0.18s; }
