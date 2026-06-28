@@ -110,7 +110,8 @@
   const dispLabel = (s) => (!s ? '' : s.type === 'reception' ? t('st_reception') : s.type === 'library' ? t('st_library') : s.label)
   const dispSub = (s) => (!s ? '' : s.type === 'reception' ? t('st_reception_sub') : s.type === 'library' ? t('st_library_sub') : tRole(s.sub))
   function openStation(s) {
-    open = s; sent = null; greet = false; f = { nombre: '', contacto: '', fecha: '', mensaje: '' }
+    open = s; sent = null; greet = false; selPost = null; blogQuery = ''; blogCat = ''
+    f = { nombre: '', contacto: '', fecha: '', mensaje: '' }
     playEnter()
     if (s && !discovered.includes(s.id)) discovered = [...discovered, s.id]
   }
@@ -143,6 +144,19 @@
   }
   let selPost = $state(null)
   let greet = $state(true) // tarjeta de bienvenida de la recepcionista
+  // Blog: buscador + categorías
+  let blogQuery = $state('')
+  let blogCat = $state('')
+  const areaLabel = (a) => (a || '').replace(/-/g, ' ').replace(/^\w/, (c) => c.toUpperCase())
+  const blogCats = $derived([...new Set(posts.map((p) => p.area))])
+  const blogFiltered = $derived(
+    posts.filter(
+      (p) =>
+        (!blogCat || p.area === blogCat) &&
+        (!blogQuery.trim() ||
+          (p.title + ' ' + (p.description || '')).toLowerCase().includes(blogQuery.trim().toLowerCase())),
+    ),
+  )
 
   // Teclas (compartidas con los botones táctiles).
   const keys = new Set()
@@ -825,11 +839,24 @@
             {/if}
           {:else}
             {#if !selPost}
-              <div class="grid">
-                {#each posts as p}
-                  <button class="card" onclick={() => (selPost = p)}><span class="tag">{p.area}</span><b>{p.title}</b><small>{formatDate(p.date)} · {p.readingMinutes} {t('min')}</small></button>
-                {/each}
+              <div class="blogtools">
+                <input class="blogsearch" type="search" placeholder={t('blog_search')} bind:value={blogQuery} />
+                <div class="cats">
+                  <button class="cat" class:on={!blogCat} onclick={() => (blogCat = '')}>{t('blog_all')}</button>
+                  {#each blogCats as c}
+                    <button class="cat" class:on={blogCat === c} onclick={() => (blogCat = blogCat === c ? '' : c)}>{areaLabel(c)}</button>
+                  {/each}
+                </div>
               </div>
+              {#if blogFiltered.length}
+                <div class="grid">
+                  {#each blogFiltered as p}
+                    <button class="card" onclick={() => (selPost = p)}><span class="tag">{areaLabel(p.area)}</span><b>{p.title}</b><small>{formatDate(p.date)} · {p.readingMinutes} {t('min')}</small></button>
+                  {/each}
+                </div>
+              {:else}
+                <p class="blogempty">{t('blog_empty')}</p>
+              {/if}
             {:else}
               {@const A = selPost.component}
               <button class="back" onclick={() => (selPost = null)}>{t('blog_back')}</button>
@@ -963,6 +990,15 @@
   .card b { font-family: 'Cormorant Garamond', Georgia, serif; font-size: 1.18rem; font-weight: 600; color: #f3f9ff; line-height: 1.15; }
   .card small { color: #8fa6bb; font-size: 0.72rem; }
   .tag { font-size: 0.6rem; color: #7fd3ff; text-transform: uppercase; letter-spacing: 0.18em; }
+  .blogtools { display: grid; gap: 0.6rem; margin-bottom: 0.9rem; }
+  .blogsearch { font: inherit; font-size: 0.88rem; color: #eaf3fb; padding: 0.6rem 0.85rem; border: 1px solid rgba(130,190,240,0.22); border-radius: 10px; background: rgba(8,16,30,0.5); }
+  .blogsearch::placeholder { color: #61748a; }
+  .blogsearch:focus { outline: 0; border-color: rgba(125,215,255,0.8); box-shadow: 0 0 0 3px rgba(95,200,255,0.15); }
+  .cats { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+  .cat { font: inherit; font-size: 0.68rem; letter-spacing: 0.03em; color: #b6c8da; padding: 0.32rem 0.72rem; border-radius: 999px; border: 1px solid rgba(130,190,240,0.25); background: rgba(255,255,255,0.04); cursor: pointer; transition: border-color 0.15s, color 0.15s, background 0.15s; }
+  .cat:hover { border-color: rgba(125,215,255,0.5); color: #e9f3fb; }
+  .cat.on { background: linear-gradient(180deg, rgba(110,205,255,0.92), rgba(70,150,235,0.92)); color: #04121f; border-color: transparent; font-weight: 600; }
+  .blogempty { color: #8fa6bb; text-align: center; padding: 1.5rem 0; font-size: 0.9rem; }
   .back { background: none; border: 0; color: #7fd3ff; font-weight: 600; cursor: pointer; padding: 0 0 0.7rem; letter-spacing: 0.04em; }
   .prose { color: #c2d2e2; line-height: 1.65; }
   .prose h4 { font-family: 'Cormorant Garamond', Georgia, serif; font-weight: 600; font-size: 1.5rem; color: #f3f9ff; margin: 0 0 0.6rem; }
