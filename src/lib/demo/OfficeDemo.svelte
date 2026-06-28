@@ -16,6 +16,7 @@
   import artLibraryUrl from '$lib/assets/demo/art/art-library.webp'
   import chairExecUrl from '$lib/assets/demo/models/chair_exec.glb?url'
   import chairLoungeUrl from '$lib/assets/demo/models/chair_lounge.glb?url'
+  import receptionistUrl from '$lib/assets/demo/team/receptionist.webp'
   import bookshelfUrl from '$lib/assets/demo/models/bookshelf.glb?url'
   import sofaUrl from '$lib/assets/demo/models/sofa.glb?url'
 
@@ -109,7 +110,7 @@
   const dispLabel = (s) => (!s ? '' : s.type === 'reception' ? t('st_reception') : s.type === 'library' ? t('st_library') : s.label)
   const dispSub = (s) => (!s ? '' : s.type === 'reception' ? t('st_reception_sub') : s.type === 'library' ? t('st_library_sub') : tRole(s.sub))
   function openStation(s) {
-    open = s; sent = null; f = { nombre: '', contacto: '', fecha: '', mensaje: '' }
+    open = s; sent = null; greet = false; f = { nombre: '', contacto: '', fecha: '', mensaje: '' }
     playEnter()
     if (s && !discovered.includes(s.id)) discovered = [...discovered, s.id]
   }
@@ -141,6 +142,7 @@
     sent = 'whatsapp'
   }
   let selPost = $state(null)
+  let greet = $state(true) // tarjeta de bienvenida de la recepcionista
 
   // Teclas (compartidas con los botones táctiles).
   const keys = new Set()
@@ -712,6 +714,18 @@
     <div class="prompt"><span class="key">E</span> {dispLabel(active)}{#if active.sub} · <small>{dispSub(active)}</small>{/if}</div>
   {/if}
 
+  {#if greet && !open}
+    <div class="greet">
+      <img class="greet-img" src={receptionistUrl} alt={site.receptionist} />
+      <div class="greet-body">
+        <span class="eyebrow">{t('greet_role')} · {site.receptionist}</span>
+        <h4>{t('greet_t')}</h4>
+        <p>{t('greet_b')}</p>
+        <button class="greet-x" onclick={() => (greet = false)}>{t('greet_close')}</button>
+      </div>
+    </div>
+  {/if}
+
   {#if toast}<div class="toast">{toast}</div>{/if}
 
   <div class="hint"><b>W/S</b> {t('hint_controls_a')} · <b>A/D</b> {t('hint_controls_b')} · {t('hint_controls_c')}</div>
@@ -798,6 +812,10 @@
                 <button class="send alt" type="button" onclick={closeStation}>{t('confirm_close')}</button>
               </div>
             {:else}
+              <div class="law">
+                <img class="avatar" src={receptionistUrl} alt={site.receptionist} />
+                <div><b>{site.receptionist}</b><small>{t('greet_role')}</small></div>
+              </div>
               <p>{t('reception_intro')}</p>
               <form class="form" onsubmit={casoWhats}>
                 <div class="row"><label>{t('l_name')}<input bind:value={f.nombre} required /></label><label>{t('l_contact')}<input bind:value={f.contacto} required placeholder={t('ph_contact')} /></label></div>
@@ -847,6 +865,15 @@
   .prompt { position: absolute; left: 50%; bottom: 12vh; transform: translateX(-50%); background: rgba(16,24,34,0.42); backdrop-filter: blur(18px) saturate(1.3); -webkit-backdrop-filter: blur(18px) saturate(1.3); border: 1px solid rgba(255,255,255,0.22); color: #fff; text-shadow: 0 1px 4px rgba(0,0,0,0.55); padding: 0.5rem 1rem 0.5rem 0.55rem; border-radius: 999px; font-size: 0.88rem; box-shadow: 0 10px 30px rgba(0,0,0,0.28); display: flex; align-items: center; gap: 0.55rem; }
   .prompt .key { background: rgba(255,255,255,0.92); color: #14202e; border-radius: 6px; padding: 1px 7px; font-size: 0.72rem; font-weight: 700; box-shadow: 0 1px 3px rgba(0,0,0,0.3); }
   .toast { position: absolute; left: 50%; top: 12%; transform: translateX(-50%); background: rgba(20,28,38,0.9); color: #fff; padding: 0.7rem 1.1rem; border-radius: 12px; font-size: 0.9rem; }
+  .greet { position: absolute; left: 50%; bottom: 9vh; transform: translateX(-50%); width: min(440px, 92vw); display: flex; gap: 0.9rem; align-items: center; padding: 0.9rem 1.05rem; border-radius: 18px; color: #e9f3fb; z-index: 25; border: 1px solid transparent;
+    background: linear-gradient(158deg, rgba(13,24,42,0.88), rgba(7,14,28,0.93)) padding-box, linear-gradient(135deg, rgba(110,214,255,0.7), rgba(120,140,255,0.2) 45%, rgba(110,214,255,0.5)) border-box;
+    box-shadow: 0 24px 60px rgba(0,0,0,0.5), 0 0 50px rgba(70,170,255,0.14); animation: sheetIn 0.5s cubic-bezier(0.16,0.84,0.3,1); }
+  .greet-img { width: 64px; height: 64px; border-radius: 50%; object-fit: cover; flex-shrink: 0; box-shadow: 0 0 0 1px rgba(125,215,255,0.5), 0 0 16px rgba(70,160,255,0.35); }
+  .greet-body { display: grid; gap: 0.2rem; }
+  .greet h4 { margin: 0.1rem 0 0; font-family: 'Cormorant Garamond', Georgia, serif; font-weight: 600; font-size: 1.3rem; color: #f3f9ff; line-height: 1.05; }
+  .greet p { margin: 0.15rem 0 0; font-size: 0.78rem; color: #b6c8da; line-height: 1.45; }
+  .greet-x { justify-self: start; margin-top: 0.5rem; padding: 0.4rem 1.1rem; border-radius: 999px; border: 1px solid rgba(160,225,255,0.5); background: linear-gradient(180deg, rgba(110,205,255,0.95), rgba(70,150,235,0.95)); color: #04121f; font: inherit; font-size: 0.74rem; font-weight: 700; letter-spacing: 0.03em; cursor: pointer; }
+  .greet-x:hover { filter: brightness(1.08); }
   .hint { position: absolute; right: 16px; bottom: 14px; color: #fff; font-size: 0.64rem; letter-spacing: 0.08em; text-align: right; text-shadow: 0 1px 4px rgba(0,0,0,0.5); }
   .badge { position: absolute; left: 16px; bottom: 14px; color: rgba(255,255,255,0.85); font-size: 0.64rem; letter-spacing: 0.08em; text-shadow: 0 1px 4px rgba(0,0,0,0.5); }
   .minimap { position: absolute; top: 76px; left: 16px; width: 96px; padding: 8px 8px 6px; border-radius: 14px; background: rgba(10,17,28,0.82); border: 1px solid rgba(125,215,255,0.28); box-shadow: 0 10px 30px rgba(0,0,0,0.35); pointer-events: none; }
@@ -958,5 +985,8 @@
     .row { grid-template-columns: 1fr; }
     .grid { grid-template-columns: 1fr; }
     .minimap { display: none; }
+    .greet { bottom: 23vh; padding: 0.8rem; }
+    .greet h4 { font-size: 1.15rem; }
+    .greet p { font-size: 0.74rem; }
   }
 </style>
