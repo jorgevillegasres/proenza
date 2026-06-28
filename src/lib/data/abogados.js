@@ -16,6 +16,7 @@ export const abogados = [
     bio_en: 'Civil law specialist: contracts, obligations, property and civil liability. Guides his clients with rigor and a close, personal approach.',
     areas: ['contratos', 'obligaciones', 'bienes'],
     email: 'htabares@proenzalegal.com',
+    citalyUrl: '', // ← agenda individual de Citaly (reemplazar; si queda vacío usa la del despacho)
   },
   {
     slug: 'edna-ramirez',
@@ -27,6 +28,7 @@ export const abogados = [
     bio_en: 'Civil lawyer focused on family law, estates and civil litigation. Defends what matters most to families with firmness and empathy.',
     areas: ['familia', 'sucesiones', 'responsabilidad-civil'],
     email: 'eramirez@proenzalegal.com',
+    citalyUrl: '', // ← agenda individual de Citaly (reemplazar; si queda vacío usa la del despacho)
   },
   {
     slug: 'ivan-salazar',
@@ -38,6 +40,7 @@ export const abogados = [
     bio_en: 'Tax law specialist: fiscal planning, compliance and defense before the tax authorities.',
     areas: ['contratos', 'obligaciones'],
     email: 'isalazar@proenzalegal.com',
+    citalyUrl: '', // ← agenda individual de Citaly (reemplazar; si queda vacío usa la del despacho)
   },
   {
     slug: 'jorge-villegas',
@@ -49,6 +52,7 @@ export const abogados = [
     bio_en: 'IT lawyer: data protection, technology contracts, cybersecurity and digital law. Bridges law and technology.',
     areas: ['contratos', 'personas'],
     email: 'jvillegas@proenzalegal.com',
+    citalyUrl: '', // ← agenda individual de Citaly (reemplazar; si queda vacío usa la del despacho)
   },
 ]
 
