@@ -11,7 +11,7 @@ export const site = {
   email: 'contacto@proenzalegal.com',
   address: 'Calle 11 # 3-58, Of. 508',
   hours: 'Lun – Vie · 9:00–11:00 y 14:00–16:00',
-  city: 'Colombia',
+  city: 'Cali, Colombia',
   // Agenda en línea (Citaly). PLACEHOLDER — reemplazar por la URL real del despacho.
   // Puede sobreescribirse por abogado con `citalyUrl` en data/abogados.js.
   citalyUrl: 'https://citaly.co/proenza',

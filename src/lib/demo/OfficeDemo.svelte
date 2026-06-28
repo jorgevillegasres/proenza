@@ -301,7 +301,7 @@
       let reflector = null
       if (!lowEnd && Reflector) {
         try {
-          reflector = new Reflector(new THREE.PlaneGeometry(FW, totalZ), { textureWidth: 512, textureHeight: 512, color: 0x6a6f76, clipBias: 0.004 })
+          reflector = new Reflector(new THREE.PlaneGeometry(FW, totalZ), { textureWidth: 256, textureHeight: 256, color: 0x6a6f76, clipBias: 0.004 })
           reflector.position.set(FX, 0, midZ); reflector.rotation.x = -Math.PI / 2; grp.add(reflector)
           M.floor.transparent = true; M.floor.opacity = 0.66 // deja ver el reflejo difuminado
           planeM(FW, totalZ, M.floor, FX, 0.004, midZ, -Math.PI / 2) // pulido encima
@@ -593,10 +593,19 @@
       const clock = new THREE.Clock(); let raf = 0
       const fwd = new THREE.Vector3(), rgt = new THREE.Vector3(), tv = new THREE.Vector3()
       let stepTimer = 0
+      let qFrames = 0, qTime = 0, qDone = false // medición de FPS para degradar calidad
       function frame() {
         raf = requestAnimationFrame(frame)
         const rawDt = clock.getDelta()
-        const dt = Math.min(rawDt, 0.05)
+        const dt = Math.min(rawDt, 0.06)
+        // --- degradación automática: si el framerate es bajo, apaga el reflejo del piso ---
+        if (!qDone && introT >= INTRO_DUR && !open) {
+          qFrames++; qTime += rawDt
+          if (qTime >= 1.4) {
+            if (reflector && qFrames / qTime < 40) { reflector.visible = false; M.floor.transparent = false; M.floor.opacity = 1; M.floor.needsUpdate = true }
+            qDone = true
+          }
+        }
         // --- intro cinematográfica: dolly suave hacia el punto de spawn ---
         if (introT < INTRO_DUR && !open) {
           introT += rawDt
@@ -625,7 +634,7 @@
           camera.rotation.order = 'YXZ'; camera.rotation.y = yaw; camera.rotation.x = pitch
           fwd.set(-Math.sin(yaw), 0, -Math.cos(yaw))
           if (mz !== 0) {
-            cpos.addScaledVector(fwd, mz * 4.4 * dt)
+            cpos.addScaledVector(fwd, mz * 5.2 * dt)
             cpos.x = Math.max(X_L + 0.5, Math.min(X_R - 0.5, cpos.x))
             cpos.z = Math.max(HALL_Z0 + 1.2, Math.min(HALL_Z1 - 0.6, cpos.z))
             stepTimer += dt

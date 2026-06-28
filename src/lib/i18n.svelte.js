@@ -5,10 +5,10 @@ export function toggleLang() {
   try { localStorage.setItem('proenza_lang', L.lang) } catch (e) { void e }
 }
 export function initLang() {
+  // Por defecto ES (despacho colombiano). Solo se cambia si el usuario lo eligió antes.
   try {
     const s = localStorage.getItem('proenza_lang')
     if (s === 'es' || s === 'en') L.lang = s
-    else if ((navigator.language || '').toLowerCase().startsWith('en')) L.lang = 'en'
   } catch (e) { void e }
 }
 
